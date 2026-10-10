@@ -18,7 +18,7 @@ export default function Dashboard() {
   const hazmat = reports.filter(r => r.action_required.includes("hazmat")).length;
   const totalNetInr = reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
 
-  const [auditResult, setAuditResult] = useState<any>(null);
+  const [auditResult, setAuditResult] = useState<Record<string, unknown> | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
   const runAudit = async () => {
@@ -120,7 +120,7 @@ export default function Dashboard() {
             
             {auditResult && auditResult.status === "insufficient_data" && (
               <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-slate-500">
-                <p className="text-sm text-slate-300">Insufficient data for weekly audit (needs >= 3 reports of same category in a ward this week).</p>
+                <p className="text-sm text-slate-300">Insufficient data for weekly audit (needs &gt;= 3 reports of same category in a ward this week).</p>
                 <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
               </div>
             )}

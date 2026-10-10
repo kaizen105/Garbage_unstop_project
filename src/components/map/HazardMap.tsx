@@ -44,7 +44,7 @@ function MapUpdater({ reports, selectedId }: { reports: { coordinates: { lat: nu
 }
 
 interface RouteData {
-  geometry: any;
+  geometry: unknown;
   distance_m: number;
   duration_s: number;
 }
@@ -56,7 +56,7 @@ interface RoutesState {
   approximate?: boolean;
 }
 
-export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any }) {
+export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: { status: string, centroid?: { lat: number, lng: number } } }) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
