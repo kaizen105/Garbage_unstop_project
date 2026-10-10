@@ -4,6 +4,7 @@ import { VoiceReporter } from "@/components/voice/VoiceReporter";
 import { useReports } from "@/lib/store/reports";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { EarlyWarningPanel } from "@/components/dashboard/EarlyWarningPanel";
 import { estimateImpact } from "@/lib/finance/impact";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then(m => m.HazardMap), { ssr: false });
@@ -20,6 +21,13 @@ export default function Dashboard() {
 
   const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [isAuditing, setIsAuditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"map" | "early_warning">("map");
+  const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
+
+  const handleSelectWard = (ward: string) => {
+    setSelectedWardName(ward);
+    setActiveTab("map");
+  };
 
   const runAudit = async () => {
     setIsAuditing(true);
@@ -80,8 +88,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col bg-slate-800 min-h-0">
-          <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap">
+        <div className="flex-1 flex flex-col bg-slate-800 min-h-0 relative">
+          <div className="absolute top-0 left-0 right-0 z-[1000] flex justify-center mt-2 pointer-events-none">
+            <div className="bg-slate-900 rounded-full border border-slate-700 p-1 flex gap-1 pointer-events-auto shadow-lg">
+              <button 
+                onClick={() => setActiveTab("map")} 
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === "map" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                Live Map
+              </button>
+              <button 
+                onClick={() => setActiveTab("early_warning")} 
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === "early_warning" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                Early Warning
+              </button>
+            </div>
+          </div>
+
+          <div className={`flex flex-col h-full ${activeTab === "map" ? "flex" : "hidden"}`}>
+            <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap">
             <div>Total: <span className="font-bold text-white">{total}</span></div>
             <div>High Sev: <span className="font-bold text-red-400">{highSev}</span></div>
             <div>Avg Sev: <span className="font-bold text-yellow-400">{avgSev}</span></div>
@@ -100,7 +126,7 @@ export default function Dashboard() {
             </button>
           </div>
           <div className="flex-1 relative z-0">
-            <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} auditResult={auditResult} />
+            <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} auditResult={auditResult} selectedWardName={selectedWardName} />
             
             {auditResult && auditResult.status === "success" && (
               <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-purple-500 max-w-sm">
@@ -125,6 +151,11 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+          </div>
+          
+          {activeTab === "early_warning" && (
+            <EarlyWarningPanel reports={reports} onSelectWard={handleSelectWard} />
+          )}
         </div>
       </div>
     </div>

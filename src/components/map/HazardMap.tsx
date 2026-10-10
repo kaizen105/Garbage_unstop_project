@@ -8,6 +8,7 @@ import type { GeoJsonObject } from "geojson";
 import { isDemoBoundaries } from "@/lib/spatial/wards";
 import L from "leaflet";
 import { estimateImpact } from "@/lib/finance/impact";
+import { weeklyBuckets } from "@/lib/early-warning/trends";
 
 import { WardTag } from "@/lib/spatial/wards";
 import type { FeatureCollection, Feature } from "geojson";
@@ -22,16 +23,28 @@ async function fetchRoute(coords: { lat: number; lng: number }) {
   return res.json();
 }
 
-function MapUpdater({ reports, selectedId }: { reports: { coordinates: { lat: number, lng: number } | null, report_id: string }[], selectedId: string | null }) {
+function MapUpdater({ reports, selectedId, selectedWardName, wardsLayer }: { reports: { coordinates: { lat: number, lng: number } | null, report_id: string }[], selectedId: string | null, selectedWardName?: string | null, wardsLayer?: FeatureCollection | null }) {
   const map = useMap();
   useEffect(() => {
+    if (selectedWardName && wardsLayer) {
+      const feature = wardsLayer.features.find(f => {
+        const name = (f.properties?.WARD_NAME || f.properties?.ward_name || "").toString();
+        return name.toLowerCase() === selectedWardName.toLowerCase();
+      });
+      if (feature) {
+        const layer = L.geoJSON(feature);
+        map.fitBounds(layer.getBounds(), { maxZoom: 14, padding: [50, 50] });
+        return;
+      }
+    }
+
     if (reports.length > 0 && !selectedId) {
       const coords = reports.filter(r => r.coordinates).map(r => [r.coordinates!.lat, r.coordinates!.lng] as [number, number]);
       if (coords.length > 0) {
         map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
       }
     }
-  }, [reports, map, selectedId]);
+  }, [reports, map, selectedId, selectedWardName, wardsLayer]);
 
   useEffect(() => {
     if (selectedId) {
@@ -57,10 +70,11 @@ interface RoutesState {
   approximate?: boolean;
 }
 
-export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+export function HazardMap({ selectedReportId, onSelectReport, auditResult, selectedWardName }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any, selectedWardName?: string | null }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
+  const [showHotspots, setShowHotspots] = useState(false);
   const [routes, setRoutes] = useState<RoutesState | null>(null);
 
   useEffect(() => {
@@ -84,6 +98,7 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
     return () => { active = false; };
   }, [selectedReportId, reports]);
 
+
   if (reports.length === 0) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10 text-slate-400">
@@ -97,6 +112,29 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
     ? wardsLayer.features.find((f: Feature) => f.properties?.ward_id === (selectedReport.ward as Extract<WardTag, { status: "matched" }>).ward_id)
     : null;
 
+  const buckets = showHotspots ? weeklyBuckets(reports) : {};
+
+  const getWardStyle = (feature: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (showHotspots) {
+      const name = (feature.properties?.WARD_NAME || feature.properties?.ward_name || "").toString();
+      let wardKey = "Unknown";
+      if (name.toLowerCase().includes("connaught") || name.toLowerCase().includes("cp")) wardKey = "Connaught Place";
+      else if (name.toLowerCase().includes("lajpat")) wardKey = "Lajpat Nagar";
+      else if (name.toLowerCase().includes("karol")) wardKey = "Karol Bagh";
+      else wardKey = name;
+      
+      const thisWeekCount = buckets[wardKey] ? buckets[wardKey]!.counts[0] : 0;
+      let fillColor = "#3388ff"; 
+      if (thisWeekCount >= 4) fillColor = "#ef4444"; 
+      else if (thisWeekCount >= 2) fillColor = "#f97316"; 
+      else if (thisWeekCount >= 1) fillColor = "#eab308"; 
+      else fillColor = "#22c55e"; 
+      
+      return { color: "#3388ff", weight: 1, fillColor, fillOpacity: 0.5 };
+    }
+    return { color: "#3388ff", weight: 1, fillOpacity: 0.1 };
+  };
+
   return (
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
       <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: "100%", width: "100%", zIndex: 1 }}>
@@ -108,7 +146,11 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
         {wardsLayer && showWards && (
           <GeoJSON 
             data={wardsLayer} 
-            style={{ color: "#3388ff", weight: 1, fillOpacity: 0.1 }}
+            style={getWardStyle}
+            onEachFeature={(f, l) => {
+              const name = f.properties?.WARD_NAME || f.properties?.ward_name || "Unknown";
+              l.bindPopup(`<b>${name}</b>`);
+            }}
           />
         )}
 
@@ -164,16 +206,35 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
           );
         })}
 
-        <MapUpdater reports={reports} selectedId={selectedReportId} />
+        <MapUpdater reports={reports} selectedId={selectedReportId} selectedWardName={selectedWardName} wardsLayer={wardsLayer} />
       </MapContainer>
 
-      <div className="absolute top-4 right-4 z-[400] flex gap-2">
+      <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end">
         <button 
           onClick={() => setShowWards(!showWards)}
           className={`px-3 py-1.5 text-xs rounded shadow-md border ${showWards ? 'bg-blue-600 text-white border-blue-700' : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800'}`}
         >
           Toggle Wards
         </button>
+        <button 
+          onClick={() => {
+            setShowHotspots(!showHotspots);
+            if (!showHotspots) setShowWards(true);
+          }}
+          className={`px-3 py-1.5 text-xs rounded shadow-md border ${showHotspots ? 'bg-purple-600 text-white border-purple-700' : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800'}`}
+        >
+          Hotspot Shading
+        </button>
+
+        {showHotspots && (
+          <div className="bg-slate-900/90 p-2 rounded shadow text-xs text-slate-200 border border-slate-700 flex flex-col gap-1 mt-1">
+            <div className="font-bold border-b border-slate-700 pb-1 mb-1">This Week Reports</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#ef4444] opacity-50"></div> &ge; 4</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#f97316] opacity-50"></div> 2-3</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#eab308] opacity-50"></div> 1</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#22c55e] opacity-50"></div> 0</div>
+          </div>
+        )}
       </div>
 
       {isDemoBoundaries() && (
