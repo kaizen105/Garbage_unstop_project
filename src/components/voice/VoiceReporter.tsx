@@ -15,6 +15,7 @@ interface ReportResult {
   transcript: string;
   transcript_mock: boolean;
   degraded: boolean;
+  degraded_reason?: string | null;
 }
 
 export function VoiceReporter() {
