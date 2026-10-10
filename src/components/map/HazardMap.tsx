@@ -88,14 +88,12 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult, selec
       const report = reports.find(r => r.report_id === selectedReportId);
       if (report && report.coordinates && (report.action_required.includes("bypass") || report.action_required.includes("hazmat"))) {
         fetchRoute(report.coordinates).then(r => { if (active) setRoutes(r) }).catch(() => { if (active) setRoutes(null) });
-      } else {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (active) setRoutes(null);
+        return () => { active = false; };
       }
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (active) setRoutes(null);
     }
+    Promise.resolve().then(() => {
+      if (active) setRoutes(null);
+    });
     return () => { active = false; };
   }, [selectedReportId, reports]);
 

@@ -13,11 +13,11 @@ function normalizeEnumValue(value: string | undefined, fallback: string) {
 const envSchema = z.object({
   GNANI_API_KEY: z.string().optional(),
   GNANI_STT_URL: z.string().url().default("https://api.vachana.ai/stt/v3"),
-  LLM_PROVIDER: z.enum(["mock", "openrouter", "evon"]).default("mock"),
+  LLM_PROVIDER: z.enum(["mock", "openrouter", "evon"]).default("openrouter"),
   LLM_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
   LLM_API_KEY: z.string().optional(),
-  LLM_MODEL_EXTRACT: z.string().optional(),
-  LLM_MODEL_AUDIT: z.string().optional(),
+  LLM_MODEL_EXTRACT: z.string().default("openai/gpt-4o-mini"),
+  LLM_MODEL_AUDIT: z.string().default("openai/gpt-4o-mini"),
   NEXT_PUBLIC_MAPBOX_TOKEN: z.string().optional(),
   NEXT_PUBLIC_MAP_PROVIDER: z.enum(["leaflet", "mapbox"]).default("leaflet"),
 }).superRefine((data, ctx) => {
@@ -25,19 +25,18 @@ const envSchema = z.object({
     if (!data.LLM_API_KEY) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["LLM_API_KEY"], message: "Required when LLM_PROVIDER is not mock" });
     }
-    if (!data.LLM_MODEL_EXTRACT) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["LLM_MODEL_EXTRACT"], message: "Required when LLM_PROVIDER is not mock" });
-    }
-    if (!data.LLM_MODEL_AUDIT) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["LLM_MODEL_AUDIT"], message: "Required when LLM_PROVIDER is not mock" });
-    }
   }
 });
 
 export function getEnv() {
+  const llmApiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY;
+  const rawProvider = process.env.LLM_PROVIDER;
+  const defaultProvider = rawProvider ? normalizeEnumValue(rawProvider, "mock") : (llmApiKey ? "openrouter" : "mock");
+
   const normalizedEnv = {
     ...process.env,
-    LLM_PROVIDER: normalizeEnumValue(process.env.LLM_PROVIDER, "mock"),
+    LLM_API_KEY: llmApiKey,
+    LLM_PROVIDER: defaultProvider,
     NEXT_PUBLIC_MAP_PROVIDER: normalizeEnumValue(process.env.NEXT_PUBLIC_MAP_PROVIDER, "leaflet"),
   };
 

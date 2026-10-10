@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { seedReports as seedData } from "../../data/seed_reports";
 
+import type { WardTag } from "../validation/schemas";
+
 export interface Report {
   report_id: string;
   hazard_category: string;
@@ -10,7 +12,7 @@ export interface Report {
   raw_location: string;
   coordinates: { lat: number; lng: number } | null;
   action_required: string;
-  ward?: unknown;
+  ward?: WardTag;
   createdAt?: string;
   transcript?: string;
 }

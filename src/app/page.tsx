@@ -34,7 +34,7 @@ export default function Dashboard() {
     setIsAuditing(true);
     try {
       const auditReports = reports.map(r => ({
-        ward_id: (r.ward as any)?.status === "matched" ? (r.ward as any).ward_name : undefined,
+        ward_id: r.ward?.ward_name ?? undefined,
         hazard_category: r.hazard_category,
         createdAt: r.createdAt,
         lat: r.coordinates?.lat,

@@ -23,8 +23,11 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
   
   // Calculate citywide totals by week by category
   const citywideByWeekAndCategory = useMemo(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/purity
-    const now = Date.now();
+    const latestReportTime = reports.reduce((max, r) => {
+      const t = r.createdAt ? new Date(r.createdAt).getTime() : 0;
+      return t > max ? t : max;
+    }, 0);
+    const now = latestReportTime || 0;
     const citywide = [
       { week: "W-3", total: 0, counts: {} as Record<string, number> },
       { week: "W-2", total: 0, counts: {} as Record<string, number> },
