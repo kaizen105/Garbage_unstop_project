@@ -33,10 +33,17 @@ export default function Dashboard() {
   const runAudit = async () => {
     setIsAuditing(true);
     try {
+      const auditReports = reports.map(r => ({
+        ward_id: (r.ward as any)?.status === "matched" ? (r.ward as any).ward_name : undefined,
+        hazard_category: r.hazard_category,
+        createdAt: r.createdAt,
+        lat: r.coordinates?.lat,
+        lng: r.coordinates?.lng
+      }));
       const res = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reports })
+        body: JSON.stringify({ reports: auditReports })
       });
       const data = await res.json();
       setAuditResult(data);
