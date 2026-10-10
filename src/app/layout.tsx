@@ -33,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ReportsProvider>
           {children}
         </ReportsProvider>
+        <footer className="bg-slate-950 text-slate-500 text-xs text-center py-2 border-t border-slate-900 shrink-0">
+          Demo data (synthetic)
+        </footer>
       </body>
     </html>
   );

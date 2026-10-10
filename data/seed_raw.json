@@ -1,0 +1,602 @@
+[
+  {
+    "id": "HZ-1001",
+    "hazard_category": "construction_debris",
+    "severity_level": 7,
+    "raw_location": "Connaught Place inner circle block F",
+    "coordinates": { "lat": 28.6330, "lng": 77.2185 },
+    "action_required": "bypass_standard",
+    "transcript": "CP inner circle block F mein concrete ke toote tukde aur plaster bikhre hain, safai jaldi chahiye",
+    "days_ago": 0.2
+  },
+  {
+    "id": "HZ-1002",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh Metro Pillar 44",
+    "coordinates": { "lat": 28.6461, "lng": 77.1902 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Karol Bagh metro pillar 44 ke paas biomedical kachra pada hai, sui aur bandage bikhre hue hain",
+    "days_ago": 0.4
+  },
+  {
+    "id": "HZ-1003",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Lajpat Nagar market gate 2",
+    "coordinates": { "lat": 28.5690, "lng": 77.2440 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar market gate 2 par kachre ka dabba overflow ho raha hai, paani bhi ruk gaya hai",
+    "days_ago": 0.6
+  },
+  {
+    "id": "HZ-1004",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Laxmi Nagar metro station gate 1",
+    "coordinates": { "lat": 28.6320, "lng": 77.2788 },
+    "action_required": "routine_collection",
+    "transcript": "लक्ष्मी नगर मेट्रो स्टेशन गेट 1 के पास सीमेंट की टूटी स्लैब और मलबा पड़ा है",
+    "days_ago": 0.8
+  },
+  {
+    "id": "HZ-1005",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Saket J-block market lane",
+    "coordinates": { "lat": 28.5250, "lng": 77.2070 },
+    "action_required": "routine_collection",
+    "transcript": "Saket J block market lane mein kachra overflow ho raha hai, bin ke paas badbu aa rahi hai",
+    "days_ago": 1.1
+  },
+  {
+    "id": "HZ-1006",
+    "hazard_category": "construction_debris",
+    "severity_level": 8,
+    "raw_location": "Connaught Place block A near parking",
+    "coordinates": { "lat": 28.6299, "lng": 77.2151 },
+    "action_required": "bypass_standard",
+    "transcript": "कनॉट प्लेस ब्लॉक ए पार्किंग के पास टूटी हुई कंक्रीट की स्लैब और मलबा जमा है",
+    "days_ago": 1.3
+  },
+  {
+    "id": "HZ-1007",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 9,
+    "raw_location": "Karol Bagh gurudwara road",
+    "coordinates": { "lat": 28.6428, "lng": 77.1865 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Karol Bagh gurudwara road ke paas medical waste mila, syringe aur cotton bikhre hain",
+    "days_ago": 1.5
+  },
+  {
+    "id": "HZ-1008",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Lajpat Nagar central market back lane",
+    "coordinates": { "lat": 28.5655, "lng": 77.2417 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर सेंट्रल मार्केट की पिछली गली में कूड़ेदान भरा है और गंदा पानी फैला है",
+    "days_ago": 1.7
+  },
+  {
+    "id": "HZ-1009",
+    "hazard_category": "chemical",
+    "severity_level": 7,
+    "raw_location": "near Okhla bus depot",
+    "coordinates": { "lat": 28.5370, "lng": 77.2732 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Okhla bus depot ke paas chemical drum se badbu wala liquid leak ho raha hai, turant dhyan do",
+    "days_ago": 1.9
+  },
+  {
+    "id": "HZ-1010",
+    "hazard_category": "construction_debris",
+    "severity_level": 7,
+    "raw_location": "Laxmi Nagar main market gali 4",
+    "coordinates": { "lat": 28.6288, "lng": 77.2758 },
+    "action_required": "bypass_standard",
+    "transcript": "लक्ष्मी नगर मेन मार्केट गली 4 में पत्थर और टूटी स्लैब से रास्ता बंद है",
+    "days_ago": 2.2
+  },
+  {
+    "id": "HZ-1011",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 6,
+    "raw_location": "Dwarka Sector 21 metro station gate 2",
+    "coordinates": { "lat": 28.5535, "lng": 77.0600 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Dwarka Sector 21 metro gate 2 ke paas electrical wire khuli padi hai, bijli ka khatra hai",
+    "days_ago": 2.4
+  },
+  {
+    "id": "HZ-1012",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 7,
+    "raw_location": "Connaught Place outer circle near Janpath",
+    "coordinates": { "lat": 28.6338, "lng": 77.2140 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "कनॉट प्लेस आउटर सर्कल जनपथ के पास कटी हुई बिजली के तार लटक रहे हैं",
+    "days_ago": 2.6
+  },
+  {
+    "id": "HZ-1013",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh Ajmal Khan Road",
+    "coordinates": { "lat": 28.6475, "lng": 77.1910 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Karol Bagh Ajmal Khan Road par biomedical waste ke packet aur bandage pade hain",
+    "days_ago": 2.8
+  },
+  {
+    "id": "HZ-1014",
+    "hazard_category": "general_overflow",
+    "severity_level": 6,
+    "raw_location": "Lajpat Nagar ring road bus stop",
+    "coordinates": { "lat": 28.5710, "lng": 77.2450 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर रिंग रोड बस स्टॉप के पास कचरे का ढेर लगा है, बिन भी भरा है",
+    "days_ago": 3.1
+  },
+  {
+    "id": "HZ-1015",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Connaught Place block N near subway",
+    "coordinates": { "lat": 28.6305, "lng": 77.2190 },
+    "action_required": "routine_collection",
+    "transcript": "CP block N subway ke paas concrete rubble aur tooti tiles padi hain, safai karni hai",
+    "days_ago": 3.3
+  },
+  {
+    "id": "HZ-1016",
+    "hazard_category": "construction_debris",
+    "severity_level": 5,
+    "raw_location": "Laxmi Nagar Vikas Marg service lane",
+    "coordinates": { "lat": 28.6312, "lng": 77.2800 },
+    "action_required": "routine_collection",
+    "transcript": "लक्ष्मी नगर विकास मार्ग सर्विस लेन में मलबा और ईंटें पड़ी हैं",
+    "days_ago": 3.5
+  },
+  {
+    "id": "HZ-1017",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Rohini Sector 7 market",
+    "coordinates": { "lat": 28.7470, "lng": 77.0545 },
+    "action_required": "routine_collection",
+    "transcript": "Rohini Sector 7 market mein kachra overflow ho raha hai, bins ke paas machhar hain",
+    "days_ago": 3.8
+  },
+  {
+    "id": "HZ-1018",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 10,
+    "raw_location": "Karol Bagh Metro Pillar 32",
+    "coordinates": { "lat": 28.6435, "lng": 77.1870 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पिलर 32 के पास मेडिकल कचरा और सुइयां बिखरी पड़ी हैं",
+    "days_ago": 4.1
+  },
+  {
+    "id": "HZ-1019",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 8,
+    "raw_location": "Connaught Place block B near central park",
+    "coordinates": { "lat": 28.6280, "lng": 77.2175 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "CP block B central park ke paas exposed wiring aur cut cable dikh rahi hai",
+    "days_ago": 4.3
+  },
+  {
+    "id": "HZ-1020",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Lajpat Nagar market gate 1",
+    "coordinates": { "lat": 28.5660, "lng": 77.2405 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर मार्केट गेट 1 पर कूड़ा बहुत फैला है, सफाईकर्मी भेजिए",
+    "days_ago": 4.6
+  },
+  {
+    "id": "HZ-1021",
+    "hazard_category": "construction_debris",
+    "severity_level": 7,
+    "raw_location": "Connaught Place block F inner circle",
+    "coordinates": { "lat": 28.6325, "lng": 77.2155 },
+    "action_required": "bypass_standard",
+    "transcript": "CP inner circle block F mein concrete ke tukde aur plaster gir rahe hain",
+    "days_ago": 4.9
+  },
+  {
+    "id": "HZ-1022",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh near metro parking",
+    "coordinates": { "lat": 28.6460, "lng": 77.1880 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पार्किंग के पास बायोमेडिकल कचरा और पट्टियां पड़ी हैं",
+    "days_ago": 5.2
+  },
+  {
+    "id": "HZ-1023",
+    "hazard_category": "construction_debris",
+    "severity_level": 5,
+    "raw_location": "Janakpuri District Centre gate 3",
+    "coordinates": { "lat": 28.6235, "lng": 77.0890 },
+    "action_required": "routine_collection",
+    "transcript": "Janakpuri District Centre gate 3 ke paas thoda malba aur tooti tiles padi hain",
+    "days_ago": 5.5
+  },
+  {
+    "id": "HZ-1024",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 6,
+    "raw_location": "Connaught Place near Regal cinema",
+    "coordinates": { "lat": 28.6300, "lng": 77.2200 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "कनॉट प्लेस रीगल सिनेमा के पास बिजली के तार खुले पड़े हैं, खतरा है",
+    "days_ago": 5.8
+  },
+  {
+    "id": "HZ-1025",
+    "hazard_category": "construction_debris",
+    "severity_level": 8,
+    "raw_location": "Connaught Place block K near parking",
+    "coordinates": { "lat": 28.6340, "lng": 77.2130 },
+    "action_required": "bypass_standard",
+    "transcript": "CP block K parking ke paas concrete slab tooti padi hai, rasta block ho raha hai",
+    "days_ago": 6.1
+  },
+  {
+    "id": "HZ-1026",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 7,
+    "raw_location": "Karol Bagh main road near metro station",
+    "coordinates": { "lat": 28.6455, "lng": 77.1920 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मुख्य सड़क मेट्रो स्टेशन के पास मेडिकल वेस्ट पड़ा है",
+    "days_ago": 6.5
+  },
+  {
+    "id": "HZ-1027",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Connaught Place block P near outer circle",
+    "coordinates": { "lat": 28.6310, "lng": 77.2180 },
+    "action_required": "routine_collection",
+    "transcript": "CP outer circle block P ke paas construction ka malba aur tooti slabs padi hain",
+    "days_ago": 7.2
+  },
+  {
+    "id": "HZ-1028",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh Metro Pillar 50",
+    "coordinates": { "lat": 28.6440, "lng": 77.1900 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पिलर 50 के पास बायोमेडिकल कचरा मिला है",
+    "days_ago": 7.6
+  },
+  {
+    "id": "HZ-1029",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Lajpat Nagar market gate 3",
+    "coordinates": { "lat": 28.5685, "lng": 77.2445 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar market gate 3 par kachre ka dabba overflow ho raha hai",
+    "days_ago": 8.1
+  },
+  {
+    "id": "HZ-1030",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Laxmi Nagar metro station gate 2",
+    "coordinates": { "lat": 28.6295, "lng": 77.2760 },
+    "action_required": "routine_collection",
+    "transcript": "लक्ष्मी नगर मेट्रो स्टेशन गेट 2 के पास मलबा और टूटी स्लैब पड़ी है",
+    "days_ago": 8.5
+  },
+  {
+    "id": "HZ-1031",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Nehru Place bus stop",
+    "coordinates": { "lat": 28.5500, "lng": 77.2540 },
+    "action_required": "routine_collection",
+    "transcript": "Nehru Place bus stop ke paas kachra overflow ho raha hai, bin bhi bhara hai",
+    "days_ago": 9.0
+  },
+  {
+    "id": "HZ-1032",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 9,
+    "raw_location": "Karol Bagh Pusa Road",
+    "coordinates": { "lat": 28.6480, "lng": 77.1855 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग पूसा रोड पर मेडिकल कचरा और सुइयां बिखरी पड़ी हैं",
+    "days_ago": 9.4
+  },
+  {
+    "id": "HZ-1033",
+    "hazard_category": "general_overflow",
+    "severity_level": 6,
+    "raw_location": "Lajpat Nagar central market gate 2",
+    "coordinates": { "lat": 28.5670, "lng": 77.2420 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar central market gate 2 par kachra jama hai, badbu aa rahi hai",
+    "days_ago": 9.9
+  },
+  {
+    "id": "HZ-1034",
+    "hazard_category": "construction_debris",
+    "severity_level": 7,
+    "raw_location": "Laxmi Nagar Vikas Marg near metro",
+    "coordinates": { "lat": 28.6325, "lng": 77.2790 },
+    "action_required": "bypass_standard",
+    "transcript": "लक्ष्मी नगर विकास मार्ग मेट्रो के पास कंक्रीट का मलबा पड़ा है",
+    "days_ago": 10.3
+  },
+  {
+    "id": "HZ-1035",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Sarojini Nagar market gate 2",
+    "coordinates": { "lat": 28.5760, "lng": 77.2000 },
+    "action_required": "routine_collection",
+    "transcript": "Sarojini Nagar market gate 2 ke paas kachra overflow ho raha hai",
+    "days_ago": 10.8
+  },
+  {
+    "id": "HZ-1036",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 7,
+    "raw_location": "Karol Bagh Metro Pillar 60",
+    "coordinates": { "lat": 28.6430, "lng": 77.1885 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पिलर 60 के पास बैंडेज और मेडिकल कचरा पड़ा है",
+    "days_ago": 11.2
+  },
+  {
+    "id": "HZ-1037",
+    "hazard_category": "general_overflow",
+    "severity_level": 3,
+    "raw_location": "Lajpat Nagar ring road near flyover",
+    "coordinates": { "lat": 28.5700, "lng": 77.2460 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar ring road flyover ke paas kachre ka dher hai",
+    "days_ago": 11.7
+  },
+  {
+    "id": "HZ-1038",
+    "hazard_category": "construction_debris",
+    "severity_level": 5,
+    "raw_location": "Kashmere Gate ISBT gate 3",
+    "coordinates": { "lat": 28.6655, "lng": 77.2270 },
+    "action_required": "routine_collection",
+    "transcript": "कश्मीरी गेट आईएसबीटी गेट 3 के पास मलबा और ईंटें पड़ी हैं",
+    "days_ago": 12.1
+  },
+  {
+    "id": "HZ-1039",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh main market",
+    "coordinates": { "lat": 28.6450, "lng": 77.1895 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Karol Bagh main market mein medical waste ke packet aur syringe pade hain",
+    "days_ago": 12.6
+  },
+  {
+    "id": "HZ-1040",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Lajpat Nagar market gate 4",
+    "coordinates": { "lat": 28.5650, "lng": 77.2438 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर मार्केट गेट 4 पर कूड़ेदान भरा है और कचरा फैला है",
+    "days_ago": 13.1
+  },
+  {
+    "id": "HZ-1041",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Mayur Vihar Phase 1 metro station",
+    "coordinates": { "lat": 28.6105, "lng": 77.2960 },
+    "action_required": "routine_collection",
+    "transcript": "Mayur Vihar Phase 1 metro station ke paas kachra overflow ho raha hai",
+    "days_ago": 13.7
+  },
+  {
+    "id": "HZ-1042",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 7,
+    "raw_location": "Karol Bagh Metro Pillar 70",
+    "coordinates": { "lat": 28.6465, "lng": 77.1875 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पिलर 70 के पास मेडिकल कचरा और सुइयां पड़ी हैं",
+    "days_ago": 14.2
+  },
+  {
+    "id": "HZ-1043",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Lajpat Nagar market gate 5",
+    "coordinates": { "lat": 28.5695, "lng": 77.2410 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar market gate 5 par kachra overflow ho raha hai",
+    "days_ago": 14.8
+  },
+  {
+    "id": "HZ-1044",
+    "hazard_category": "chemical",
+    "severity_level": 8,
+    "raw_location": "Okhla industrial area phase 1",
+    "coordinates": { "lat": 28.5340, "lng": 77.2760 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "ओखला इंडस्ट्रियल एरिया फेज 1 में केमिकल ड्रम से बदबूदार तरल निकल रहा है",
+    "days_ago": 15.4
+  },
+  {
+    "id": "HZ-1045",
+    "hazard_category": "construction_debris",
+    "severity_level": 5,
+    "raw_location": "Laxmi Nagar gali number 5",
+    "coordinates": { "lat": 28.6280, "lng": 77.2785 },
+    "action_required": "routine_collection",
+    "transcript": "Laxmi Nagar gali number 5 mein tooti hui slab aur malba pada hai",
+    "days_ago": 16.0
+  },
+  {
+    "id": "HZ-1046",
+    "hazard_category": "general_overflow",
+    "severity_level": 3,
+    "raw_location": "India Gate lawns near gate 2",
+    "coordinates": { "lat": 28.6140, "lng": 77.2280 },
+    "action_required": "routine_collection",
+    "transcript": "इंडिया गेट लॉन गेट 2 के पास कचरा फैला है, बिन भरा है",
+    "days_ago": 16.6
+  },
+  {
+    "id": "HZ-1047",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 9,
+    "raw_location": "Karol Bagh Metro Pillar 80",
+    "coordinates": { "lat": 28.6420, "lng": 77.1905 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Karol Bagh metro pillar 80 ke paas biomedical waste aur bandage bikhre hain",
+    "days_ago": 17.2
+  },
+  {
+    "id": "HZ-1048",
+    "hazard_category": "general_overflow",
+    "severity_level": 6,
+    "raw_location": "Lajpat Nagar central market back gate",
+    "coordinates": { "lat": 28.5665, "lng": 77.2448 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर सेंट्रल मार्केट पिछले गेट पर कचरा जमा है",
+    "days_ago": 17.9
+  },
+  {
+    "id": "HZ-1049",
+    "hazard_category": "construction_debris",
+    "severity_level": 5,
+    "raw_location": "Chandni Chowk near town hall",
+    "coordinates": { "lat": 28.6510, "lng": 77.2290 },
+    "action_required": "routine_collection",
+    "transcript": "Chandni Chowk town hall ke paas thoda malba aur tooti tiles padi hain",
+    "days_ago": 18.5
+  },
+  {
+    "id": "HZ-1050",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Lajpat Nagar market gate 6",
+    "coordinates": { "lat": 28.5680, "lng": 77.2425 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर मार्केट गेट 6 पर कूड़ा फैला है, सफाई करवाइए",
+    "days_ago": 19.3
+  },
+  {
+    "id": "HZ-1051",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 6,
+    "raw_location": "Saket metro station gate 2",
+    "coordinates": { "lat": 28.5235, "lng": 77.2080 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "Saket metro station gate 2 ke paas electrical wire khuli hai, khatra hai",
+    "days_ago": 20.4
+  },
+  {
+    "id": "HZ-1052",
+    "hazard_category": "biohazard_medical",
+    "severity_level": 8,
+    "raw_location": "Karol Bagh Metro Pillar 90",
+    "coordinates": { "lat": 28.6470, "lng": 77.1888 },
+    "action_required": "dispatch_hazmat_bypass_standard",
+    "transcript": "करोल बाग मेट्रो पिलर 90 के पास मेडिकल कचरा पड़ा है",
+    "days_ago": 21.2
+  },
+  {
+    "id": "HZ-1053",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Lajpat Nagar market gate 7",
+    "coordinates": { "lat": 28.5675, "lng": 77.2435 },
+    "action_required": "routine_collection",
+    "transcript": "Lajpat Nagar market gate 7 par kachra overflow ho raha hai",
+    "days_ago": 22.0
+  },
+  {
+    "id": "HZ-1054",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Laxmi Nagar metro station gate 3",
+    "coordinates": { "lat": 28.6318, "lng": 77.2770 },
+    "action_required": "routine_collection",
+    "transcript": "लक्ष्मी नगर मेट्रो स्टेशन गेट 3 के पास मलबा पड़ा है",
+    "days_ago": 22.7
+  },
+  {
+    "id": "HZ-1055",
+    "hazard_category": "general_overflow",
+    "severity_level": 4,
+    "raw_location": "Dwarka Sector 21 market",
+    "coordinates": { "lat": 28.5515, "lng": 77.0575 },
+    "action_required": "routine_collection",
+    "transcript": "Dwarka Sector 21 market mein kachra overflow ho raha hai",
+    "days_ago": 23.5
+  },
+  {
+    "id": "HZ-1056",
+    "hazard_category": "general_overflow",
+    "severity_level": 6,
+    "raw_location": "Lajpat Nagar ring road near bus stop",
+    "coordinates": { "lat": 28.5715, "lng": 77.2455 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर रिंग रोड बस स्टॉप के पास कूड़ा भरा है",
+    "days_ago": 24.3
+  },
+  {
+    "id": "HZ-1057",
+    "hazard_category": "construction_debris",
+    "severity_level": 6,
+    "raw_location": "Rohini Sector 7 bus depot",
+    "coordinates": { "lat": 28.7485, "lng": 77.0580 },
+    "action_required": "routine_collection",
+    "transcript": "Rohini Sector 7 bus depot ke paas thoda malba pada hai",
+    "days_ago": 25.1
+  },
+  {
+    "id": "HZ-1058",
+    "hazard_category": "general_overflow",
+    "severity_level": 3,
+    "raw_location": "Lajpat Nagar market gate 8",
+    "coordinates": { "lat": 28.5658, "lng": 77.2428 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर मार्केट गेट 8 पर कचरा फैला है",
+    "days_ago": 26.0
+  },
+  {
+    "id": "HZ-1059",
+    "hazard_category": "electrical_hazard",
+    "severity_level": 5,
+    "raw_location": "Janakpuri West metro station",
+    "coordinates": { "lat": 28.6205, "lng": 77.0865 },
+    "action_required": "routine_collection",
+    "transcript": "Janakpuri West metro station ke paas electrical wire latak rahi hai",
+    "days_ago": 26.8
+  },
+  {
+    "id": "HZ-1060",
+    "hazard_category": "general_overflow",
+    "severity_level": 5,
+    "raw_location": "Lajpat Nagar central market gate 1",
+    "coordinates": { "lat": 28.5698, "lng": 77.2400 },
+    "action_required": "routine_collection",
+    "transcript": "लाजपत नगर सेंट्रल मार्केट गेट 1 पर कूड़ा जमा है",
+    "days_ago": 27.6
+  }
+]
