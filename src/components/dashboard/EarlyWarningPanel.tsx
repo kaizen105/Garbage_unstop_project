@@ -21,6 +21,33 @@ const catColors: Record<string, string> = {
 export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelProps) {
   const hotspots = useMemo(() => rankHotspots(reports), [reports]);
   
+  // Calculate citywide totals by week by category
+  const citywideByWeekAndCategory = useMemo(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/purity
+    const now = Date.now();
+    const citywide = [
+      { week: "W-3", total: 0, counts: {} as Record<string, number> },
+      { week: "W-2", total: 0, counts: {} as Record<string, number> },
+      { week: "W-1", total: 0, counts: {} as Record<string, number> },
+      { week: "W0", total: 0, counts: {} as Record<string, number> }
+    ];
+
+    for (const r of reports) {
+      const ageMs = now - new Date(r.createdAt || now).getTime();
+      const weekIndex = Math.floor(ageMs / (7 * 24 * 60 * 60 * 1000));
+      if (weekIndex >= 0 && weekIndex < 4) {
+         const w = 3 - weekIndex;
+         const cat = r.hazard_category || "unknown";
+         const weekData = citywide[w];
+         if (weekData) {
+           weekData.counts[cat] = (weekData.counts[cat] || 0) + 1;
+           weekData.total++;
+         }
+      }
+    }
+    return citywide;
+  }, [reports]);
+
   if (reports.length < 5) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-slate-400">
@@ -32,28 +59,6 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
   const wardsOnWatch = hotspots.filter(h => h.risk === "high" || h.risk === "medium").length;
   const projectedHazards = hotspots.reduce((sum, h) => sum + h.projection, 0);
   const highestRiskWard = hotspots.length > 0 ? hotspots[0]!.ward : "None";
-
-  // Calculate citywide totals by week by category
-  const citywideByWeekAndCategory = [
-    { week: "W-3", total: 0, counts: {} as Record<string, number> },
-    { week: "W-2", total: 0, counts: {} as Record<string, number> },
-    { week: "W-1", total: 0, counts: {} as Record<string, number> },
-    { week: "W0", total: 0, counts: {} as Record<string, number> }
-  ];
-
-  for (const r of reports) {
-    const ageMs = Date.now() - new Date(r.createdAt || Date.now()).getTime();
-    const weekIndex = Math.floor(ageMs / (7 * 24 * 60 * 60 * 1000));
-    if (weekIndex >= 0 && weekIndex < 4) {
-       const w = 3 - weekIndex;
-       const cat = r.hazard_category || "unknown";
-       const weekData = citywideByWeekAndCategory[w];
-       if (weekData) {
-         weekData.counts[cat] = (weekData.counts[cat] || 0) + 1;
-         weekData.total++;
-       }
-    }
-  }
 
   const riskColors = {
     high: "bg-red-500/20 text-red-400 border-red-500/50",

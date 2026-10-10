@@ -59,7 +59,7 @@ rawSeed.forEach((raw) => {
   }
   
   // Jitter if within 600m of an anchor
-  let point = turf.point([data.coordinates.lng, data.coordinates.lat]);
+  const point = turf.point([data.coordinates.lng, data.coordinates.lat]);
   let nearestAnchor = null;
   let minDistance = Infinity;
 

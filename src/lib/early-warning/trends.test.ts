@@ -36,8 +36,8 @@ describe("Early Warning Trends", () => {
     ];
 
     const buckets = weeklyBuckets(reports, now);
-    expect(buckets["Connaught Place"]!.counts).toEqual([1, 1, 1, 1]);
-    expect(buckets["Connaught Place"]!.categoryCounts["chemical"]).toBe(1); // only W0 counts for cat
+    expect(buckets["CP"]!.counts).toEqual([1, 1, 1, 1]);
+    expect(buckets["CP"]!.categoryCounts["chemical"]).toBe(1); // only W0 counts for cat
     expect(buckets["Lajpat Nagar"]).toBeUndefined();
   });
 

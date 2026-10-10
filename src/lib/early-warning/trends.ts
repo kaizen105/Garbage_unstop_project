@@ -7,6 +7,7 @@ export interface WardBucket {
   ward: string;
   counts: [number, number, number, number]; // [W0, W1, W2, W3] where W0 is most recent
   categoryCounts: Record<string, number>;
+  latestReports?: Report[];
 }
 
 export interface HotspotRanking {
@@ -39,13 +40,13 @@ export function weeklyBuckets(reports: Report[], now: number = Date.now()): Reco
     if (weekIndex >= 4) continue;
 
     if (!buckets[ward]) {
-      buckets[ward] = { ward, counts: [0, 0, 0, 0], categoryCounts: {}, latestReports: [] } as any;
+      buckets[ward] = { ward, counts: [0, 0, 0, 0], categoryCounts: {}, latestReports: [] };
     }
 
     buckets[ward]!.counts[weekIndex as 0 | 1 | 2 | 3]++;
     if (weekIndex === 0) {
       buckets[ward]!.categoryCounts[r.hazard_category] = (buckets[ward]!.categoryCounts[r.hazard_category] || 0) + 1;
-      (buckets[ward] as any).latestReports.push(r);
+      buckets[ward]!.latestReports!.push(r);
     }
   }
 
@@ -136,8 +137,8 @@ export function rankHotspots(reports: Report[], now: number = Date.now(), n: num
 
     // Compute nearest landmark
     let area_landmark = undefined;
-    const latest = (b as any).latestReports as Report[];
-    if (latest.length > 0) {
+    const latest = b.latestReports;
+    if (latest && latest.length > 0) {
       // Find valid points
       const points = latest
         .filter(r => r.coordinates && !isNaN(r.coordinates.lat) && !isNaN(r.coordinates.lng))
