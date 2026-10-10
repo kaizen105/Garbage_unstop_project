@@ -1,0 +1,8 @@
+data/raw/
+scripts/
+docs/
+.env.local
+.env
+.npmrc
+tests/
+test/
