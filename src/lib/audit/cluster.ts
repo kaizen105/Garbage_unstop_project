@@ -22,20 +22,24 @@ export function findLargestAnomaly(reports: { ward_id?: string; hazard_category:
     countsPrev.set(key, (countsPrev.get(key) || 0) + 1);
   }
 
-  let maxIncrease = 0;
+  let maxIncrease = -Infinity;
   let maxKey: string | null = null;
   let maxThis = 0;
   let maxPrev = 0;
+  let maxPct = 0;
 
   for (const [key, countThis] of countsThis.entries()) {
     if (countThis >= 3) {
       const countPrev = countsPrev.get(key) || 0;
-      const increase = countPrev === 0 ? Infinity : (countThis - countPrev) / countPrev;
-      if (increase > maxIncrease) {
+      const increase = countThis - countPrev;
+      const pct_increase = countPrev === 0 ? Infinity : (countThis - countPrev) / countPrev;
+      
+      if (increase > maxIncrease || (increase === maxIncrease && countThis > maxThis)) {
         maxIncrease = increase;
         maxKey = key;
         maxThis = countThis;
         maxPrev = countPrev;
+        maxPct = pct_increase;
       }
     }
   }
@@ -58,7 +62,7 @@ export function findLargestAnomaly(reports: { ward_id?: string; hazard_category:
     category,
     this_week: maxThis,
     prev_week: maxPrev,
-    pct_increase: maxIncrease === Infinity ? 1000 : Math.round(maxIncrease * 100),
+    pct_increase: maxPct === Infinity ? 1000 : Math.round(maxPct * 100),
     centroid: relevantReports.length > 0 ? { lat, lng } : null
   };
 }
