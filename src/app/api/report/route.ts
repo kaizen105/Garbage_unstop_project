@@ -1,2 +1,1 @@
-﻿export const dynamic = 'force-dynamic';
-export async function GET() { throw new Error('NOT_IMPLEMENTED'); } // TODO: Implement feature
+﻿export async function POST() { throw new Error('NOT_IMPLEMENTED'); } // TODO: Implement feature
