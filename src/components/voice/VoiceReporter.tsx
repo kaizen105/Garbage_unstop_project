@@ -238,11 +238,23 @@ export function VoiceReporter() {
 
       {state === "success" && result && (
         <div className="border p-4 rounded-lg bg-green-50 text-black">
-          <h3 className="font-bold text-green-700 mb-2">Report Generated!</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-green-700">Report Generated!</h3>
+            {result.degraded && (
+              <span className="text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-mono">
+                Degraded Fallback
+              </span>
+            )}
+          </div>
+          {result.degraded && result.degraded_reason && (
+            <div className="mb-2 text-xs bg-amber-50 border border-amber-200 p-2 rounded text-amber-800">
+              <strong>Degraded Notice:</strong> {result.degraded_reason}
+            </div>
+          )}
           <p className="text-sm"><strong>ID:</strong> {result.report.report_id}</p>
           <p className="text-sm"><strong>Category:</strong> {humanizeCategory(result.report.hazard_category)}</p>
           <p className="text-sm"><strong>Severity:</strong> {result.report.severity_level}/10</p>
-          <p className="text-sm"><strong>Location:</strong> {result.report.raw_location}</p>
+          <p className="text-sm"><strong>Location:</strong> {result.report.raw_location || <span className="text-slate-400 italic">Location not resolved</span>}</p>
           <p className="text-sm"><strong>Action:</strong> {result.report.action_required}</p>
           <div className="mt-2 text-xs text-gray-600">Transcript: {result.transcript}</div>
           <button onClick={() => { setState("idle"); setTextInput(""); setResult(null); }} className="mt-4 w-full py-2 bg-gray-200 text-gray-800 rounded-md">New Report</button>

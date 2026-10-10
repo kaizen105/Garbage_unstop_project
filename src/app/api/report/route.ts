@@ -77,7 +77,8 @@ export async function POST(request: Request) {
       report,
       transcript: text,
       transcript_mock: isMock,
-      degraded: extraction.degraded || false
+      degraded: extraction.degraded || false,
+      degraded_reason: extraction.errorReason || null
     });
 
   } catch (error: unknown) {

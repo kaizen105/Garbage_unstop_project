@@ -24,7 +24,7 @@ describe('LLM Extraction', () => {
     chatMock.mockResolvedValueOnce("Still invalid");
     
     const res = await extractHazard("Bad data");
-    expect(res).toEqual({ hazard_category: "unknown", severity_level: 5, raw_location: "", degraded: true });
+    expect(res).toEqual(expect.objectContaining({ hazard_category: "unknown", severity_level: 5, raw_location: "", degraded: true }));
     expect(chatMock).toHaveBeenCalledTimes(2);
   });
 });
