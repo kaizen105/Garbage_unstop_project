@@ -24,7 +24,9 @@ export async function chat(messages: { role: string; content: string }[], model?
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.LLM_API_KEY}`
+        "Authorization": `Bearer ${env.LLM_API_KEY}`,
+        "HTTP-Referer": "https://safai-kavach.vercel.app",
+        "X-Title": "SafaiKavach"
       },
       body: JSON.stringify(payload),
       signal: controller.signal

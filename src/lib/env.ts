@@ -16,8 +16,8 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(["mock", "openrouter", "evon"]).default("openrouter"),
   LLM_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
   LLM_API_KEY: z.string().optional(),
-  LLM_MODEL_EXTRACT: z.string().default("openai/gpt-4o-mini"),
-  LLM_MODEL_AUDIT: z.string().default("openai/gpt-4o-mini"),
+  LLM_MODEL_EXTRACT: z.string().default("meta-llama/llama-3.3-70b-instruct:free"),
+  LLM_MODEL_AUDIT: z.string().default("meta-llama/llama-3.3-70b-instruct:free"),
   NEXT_PUBLIC_MAPBOX_TOKEN: z.string().optional(),
   NEXT_PUBLIC_MAP_PROVIDER: z.enum(["leaflet", "mapbox"]).default("leaflet"),
 }).superRefine((data, ctx) => {
