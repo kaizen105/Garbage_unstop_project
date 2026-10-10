@@ -18,7 +18,7 @@ export default function Dashboard() {
   const hazmat = reports.filter(r => r.action_required.includes("hazmat")).length;
   const totalNetInr = reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
 
-  const [auditResult, setAuditResult] = useState<Record<string, unknown> | null>(null);
+  const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [isAuditing, setIsAuditing] = useState(false);
 
   const runAudit = async () => {
@@ -109,10 +109,10 @@ export default function Dashboard() {
                   <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">AI-generated; verify on site</span>
                 </h3>
                 <div className="space-y-2 text-sm text-slate-300">
-                  <p><strong className="text-slate-100">Ward:</strong> {auditResult.ward} <span className="text-red-400">(+{auditResult.pct_increase}% anomaly)</span></p>
-                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {auditResult.dominant_anomaly}</p>
-                  <p><strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause}</p>
-                  <p><strong className="text-slate-100">Recommended Action:</strong> {auditResult.recommendation}</p>
+                  <p><strong className="text-slate-100">Ward:</strong> {auditResult.ward as string} <span className="text-red-400">(+{auditResult.pct_increase as number}% anomaly)</span></p>
+                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {auditResult.dominant_anomaly as string}</p>
+                  <p><strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause as string}</p>
+                  <p><strong className="text-slate-100">Recommended Action:</strong> {auditResult.recommendation as string}</p>
                 </div>
                 <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
               </div>

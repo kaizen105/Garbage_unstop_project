@@ -22,7 +22,7 @@ export const seedReports: Report[] = [
   ...Array.from({ length: 19 }).map((_, i) => ({
     report_id: `HZ-RND${i}`,
     transcript: `Random report ${i}`,
-    hazard_category: ["general_overflow", "chemical", "unknown"][i % 3],
+    hazard_category: ["general_overflow", "chemical", "unknown"][i % 3] as string,
     severity_level: (i % 5) + 3,
     raw_location: `Location ${i}`,
     action_required: "routine_collection",

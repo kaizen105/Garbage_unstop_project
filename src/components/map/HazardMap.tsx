@@ -44,7 +44,7 @@ function MapUpdater({ reports, selectedId }: { reports: { coordinates: { lat: nu
 }
 
 interface RouteData {
-  geometry: unknown;
+  geometry: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   distance_m: number;
   duration_s: number;
 }
@@ -56,7 +56,7 @@ interface RoutesState {
   approximate?: boolean;
 }
 
-export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: { status: string, centroid?: { lat: number, lng: number } } }) {
+export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
@@ -128,13 +128,13 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
         )}
 
         {routes?.planned && (
-          <GeoJSON key={`planned-${selectedReportId}`} data={routes.planned.geometry} style={{ color: "#888", weight: 3, dashArray: "5, 10" }} />
+          <GeoJSON key={`planned-${selectedReportId}`} data={routes.planned.geometry as any} style={{ color: "#888", weight: 3, dashArray: "5, 10" }} />
         )}
         {routes?.bypass && (
-          <GeoJSON key={`bypass-${selectedReportId}`} data={routes.bypass.geometry} style={{ color: "#22c55e", weight: 4 }} />
+          <GeoJSON key={`bypass-${selectedReportId}`} data={routes.bypass.geometry as any} style={{ color: "#22c55e", weight: 4 }} />
         )}
         {routes?.hazmat && (
-          <GeoJSON key={`hazmat-${selectedReportId}`} data={routes.hazmat.geometry} style={{ color: "#f97316", weight: 4 }} />
+          <GeoJSON key={`hazmat-${selectedReportId}`} data={routes.hazmat.geometry as any} style={{ color: "#f97316", weight: 4 }} />
         )}
 
         {reports.map(r => {

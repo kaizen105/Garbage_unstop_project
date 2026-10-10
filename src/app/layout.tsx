@@ -17,6 +17,9 @@ import { ReportsProvider } from "@/lib/store/reports";
 export const metadata: Metadata = {
   title: "SafaiKavach - AI Municipal Dispatch & Audit Engine",
   description: "AI Municipal Dispatch Engine",
+};
+
+export const viewport = {
   themeColor: "#0f172a"
 };
 
