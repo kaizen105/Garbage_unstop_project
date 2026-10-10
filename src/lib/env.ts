@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+function normalizeEnumValue(value: string | undefined, fallback: string) {
+  if (value === undefined) return fallback;
+
+  const trimmed = value.trim();
+  const withoutQuotes = trimmed.replace(/^['"]|['"]$/g, "").trim();
+  const normalized = withoutQuotes.toLowerCase();
+
+  return normalized === "" ? fallback : normalized;
+}
+
 const envSchema = z.object({
   GNANI_API_KEY: z.string().optional(),
   GNANI_STT_URL: z.string().url().default("https://api.vachana.ai/stt/v3"),
@@ -25,7 +35,13 @@ const envSchema = z.object({
 });
 
 export function getEnv() {
-  const _env = envSchema.safeParse(process.env);
+  const normalizedEnv = {
+    ...process.env,
+    LLM_PROVIDER: normalizeEnumValue(process.env.LLM_PROVIDER, "mock"),
+    NEXT_PUBLIC_MAP_PROVIDER: normalizeEnumValue(process.env.NEXT_PUBLIC_MAP_PROVIDER, "leaflet"),
+  };
+
+  const _env = envSchema.safeParse(normalizedEnv);
 
   if (!_env.success) {
     const missingKeys = _env.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join(", ");
