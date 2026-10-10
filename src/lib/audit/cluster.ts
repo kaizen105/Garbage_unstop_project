@@ -42,7 +42,9 @@ export function findLargestAnomaly(reports: { ward_id?: string; hazard_category:
 
   if (!maxKey) return null;
 
-  const [ward, category] = maxKey.split("|");
+  const parts = maxKey.split("|");
+  const ward = parts[0];
+  const category = parts[1] || "";
   
   const relevantReports = thisWeek.filter(r => r.ward_id === ward && r.hazard_category === category && r.lat && r.lng);
   let lat = 0, lng = 0;

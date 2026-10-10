@@ -90,9 +90,40 @@ export default function Dashboard() {
               Estimated Net Prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
               <span className="text-[10px] ml-1 text-slate-500">(illustrative)</span>
             </div>
+            
+            <button 
+              onClick={runAudit} 
+              disabled={isAuditing} 
+              className="ml-auto bg-purple-600 hover:bg-purple-700 px-4 py-1 rounded text-sm font-bold shadow-lg flex items-center"
+            >
+              {isAuditing ? "Auditing..." : "Run Weekly Audit"}
+            </button>
           </div>
           <div className="flex-1 relative z-0">
-            <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} />
+            <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} auditResult={auditResult} />
+            
+            {auditResult && auditResult.status === "success" && (
+              <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-purple-500 max-w-sm">
+                <h3 className="font-bold text-purple-400 mb-2 flex items-center justify-between">
+                  Weekly Root-Cause Audit
+                  <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">AI-generated; verify on site</span>
+                </h3>
+                <div className="space-y-2 text-sm text-slate-300">
+                  <p><strong className="text-slate-100">Ward:</strong> {auditResult.ward} <span className="text-red-400">(+{auditResult.pct_increase}% anomaly)</span></p>
+                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {auditResult.dominant_anomaly}</p>
+                  <p><strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause}</p>
+                  <p><strong className="text-slate-100">Recommended Action:</strong> {auditResult.recommendation}</p>
+                </div>
+                <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
+              </div>
+            )}
+            
+            {auditResult && auditResult.status === "insufficient_data" && (
+              <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-slate-500">
+                <p className="text-sm text-slate-300">Insufficient data for weekly audit (needs >= 3 reports of same category in a ward this week).</p>
+                <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
+              </div>
+            )}
           </div>
         </div>
       </div>

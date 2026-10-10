@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import seedData from "../../data/seed_reports";
+import { seedReports as seedData } from "../../data/seed_reports";
 
 export interface Report {
   report_id: string;
@@ -10,7 +10,9 @@ export interface Report {
   raw_location: string;
   coordinates: { lat: number; lng: number } | null;
   action_required: string;
-  ward: unknown;
+  ward?: unknown;
+  createdAt?: string;
+  transcript?: string;
 }
 
 interface ReportsContextType {

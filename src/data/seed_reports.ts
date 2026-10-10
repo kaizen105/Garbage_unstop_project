@@ -1,5 +1,4 @@
 import { Report } from "@/lib/store/reports";
-import { v4 as uuidv4 } from "uuid";
 
 // Connaught place approx: 28.6315, 77.2167
 const ONE_DAY = 24 * 60 * 60 * 1000;

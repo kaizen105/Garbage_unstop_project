@@ -4,7 +4,7 @@ export function estimateImpact(report: { hazard_category: string, severity_level
   let prevented_inr = 0;
   
   if (report.action_required !== "routine_collection") {
-    const baseCost = AVOIDED_INCIDENT_COST_INR[report.hazard_category] || AVOIDED_INCIDENT_COST_INR["unknown"];
+    const baseCost = AVOIDED_INCIDENT_COST_INR[report.hazard_category] || AVOIDED_INCIDENT_COST_INR["unknown"] || 10000;
     prevented_inr = baseCost * SEVERITY_MULTIPLIER(report.severity_level);
   }
 
