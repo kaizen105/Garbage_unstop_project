@@ -3,8 +3,8 @@
 
 ## Features
 - [x] A1  Gnani STT server client + /api/transcribe (validation, mock, retry)
-- [ ] A2  extractHazard(): OpenRouter + mock + think-strip + zod + retry
-- [ ] A3  Voice recorder component: hold-to-record, client-side WAV 16kHz, 30s cap
+- [x] A2  extractHazard(): OpenRouter + mock + think-strip + zod + retry
+- [x] A3  Voice recorder component: hold-to-record, client-side WAV 16kHz, 30s cap
 - [ ] B1  Delhi ward GeoJSON + Turf.js tagging
 - [ ] B2  Leaflet map dashboard
 - [ ] C1  Routing: bypass + hazmat

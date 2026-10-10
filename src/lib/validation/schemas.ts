@@ -40,7 +40,7 @@ export const HazardReportSchema = z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
   }).nullable(),
-  action_required: z.string(),
+  action_required: z.enum(["dispatch_hazmat_bypass_standard", "bypass_standard", "routine_collection"]),
 });
 export type HazardReport = z.infer<typeof HazardReportSchema>;
 

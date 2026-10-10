@@ -1,0 +1,17 @@
+[
+  { "name": "Karol Bagh Metro", "lat": 28.6448, "lng": 77.1891, "verify": false },
+  { "name": "Connaught Place", "lat": 28.6315, "lng": 77.2167, "verify": true },
+  { "name": "India Gate", "lat": 28.6129, "lng": 77.2295, "verify": true },
+  { "name": "Chandni Chowk", "lat": 28.6505, "lng": 77.2303, "verify": true },
+  { "name": "Lajpat Nagar", "lat": 28.5677, "lng": 77.2433, "verify": true },
+  { "name": "Saket", "lat": 28.5245, "lng": 77.2066, "verify": true },
+  { "name": "Dwarka Sec 21", "lat": 28.5523, "lng": 77.0583, "verify": true },
+  { "name": "Rohini", "lat": 28.7366, "lng": 77.1130, "verify": true },
+  { "name": "Nehru Place", "lat": 28.5494, "lng": 77.2523, "verify": true },
+  { "name": "Okhla", "lat": 28.5524, "lng": 77.2790, "verify": true },
+  { "name": "Laxmi Nagar", "lat": 28.6304, "lng": 77.2773, "verify": true },
+  { "name": "Janakpuri", "lat": 28.6219, "lng": 77.0878, "verify": true },
+  { "name": "Sarojini Nagar", "lat": 28.5723, "lng": 77.1957, "verify": true },
+  { "name": "Kashmere Gate", "lat": 28.6665, "lng": 77.2321, "verify": true },
+  { "name": "Mayur Vihar", "lat": 28.6046, "lng": 77.2963, "verify": true }
+]
