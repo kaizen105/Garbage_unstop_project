@@ -1,7 +1,8 @@
 import wardsData from "../../data/delhi_wards.json";
 import * as turf from "@turf/turf";
+import type { Feature, Polygon, MultiPolygon } from "geojson";
 
-const isDemo = (wardsData as any).demo_boundaries === true;
+const isDemo = (wardsData as { demo_boundaries?: boolean }).demo_boundaries === true;
 
 export type WardTag = 
   | { status: "matched"; ward_id: string; ward_name: string }
@@ -23,7 +24,7 @@ export function tagWard(coords: { lat: number; lng: number } | null): WardTag {
 
   try {
     const pt = turf.point([coords.lng, coords.lat]);
-    for (const feature of (wardsData as any).features) {
+    for (const feature of (wardsData as { features: Feature<Polygon | MultiPolygon>[] }).features) {
       if (turf.booleanPointInPolygon(pt, feature)) {
         return {
           status: "matched",

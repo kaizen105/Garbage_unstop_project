@@ -8,7 +8,7 @@ const outputPath = path.resolve('src/data/delhi_wards.json');
 let raw;
 try {
   raw = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
-} catch (err) {
+} catch {
   console.error("Failed to read raw file, generating DEMO data");
   // DEMO Fallback
   const demoZones = [

@@ -7,6 +7,9 @@ import { useReports } from "@/lib/store/reports";
 import { isDemoBoundaries } from "@/lib/spatial/wards";
 import L from "leaflet";
 
+import { WardTag } from "@/lib/spatial/wards";
+import type { FeatureCollection, Feature } from "geojson";
+
 async function fetchRoute(coords: { lat: number; lng: number }) {
   const res = await fetch("/api/route", {
     method: "POST",
@@ -17,11 +20,11 @@ async function fetchRoute(coords: { lat: number; lng: number }) {
   return res.json();
 }
 
-function MapUpdater({ reports, selectedId }: { reports: any[], selectedId: string | null }) {
+function MapUpdater({ reports, selectedId }: { reports: { coordinates: { lat: number, lng: number } | null, report_id: string }[], selectedId: string | null }) {
   const map = useMap();
   useEffect(() => {
     if (reports.length > 0 && !selectedId) {
-      const coords = reports.filter(r => r.coordinates).map(r => [r.coordinates.lat, r.coordinates.lng] as [number, number]);
+      const coords = reports.filter(r => r.coordinates).map(r => [r.coordinates!.lat, r.coordinates!.lng] as [number, number]);
       if (coords.length > 0) {
         map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
       }
@@ -41,25 +44,28 @@ function MapUpdater({ reports, selectedId }: { reports: any[], selectedId: strin
 
 export function HazardMap({ selectedReportId, onSelectReport }: { selectedReportId: string | null, onSelectReport: (id: string) => void }) {
   const { reports } = useReports();
-  const [wardsLayer, setWardsLayer] = useState<any>(null);
+  const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
-  const [routes, setRoutes] = useState<any>(null);
+  const [routes, setRoutes] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    fetch("/api/wards").then(r => r.json()).then(data => setWardsLayer(data)).catch(() => {});
+    fetch("/api/wards").then(r => r.json()).then((data: FeatureCollection) => setWardsLayer(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
+    let active = true;
     if (selectedReportId) {
       const report = reports.find(r => r.report_id === selectedReportId);
       if (report && report.coordinates && (report.action_required.includes("bypass") || report.action_required.includes("hazmat"))) {
-        fetchRoute(report.coordinates).then(r => setRoutes(r)).catch(() => setRoutes(null));
+        fetchRoute(report.coordinates).then(r => { if (active) setRoutes(r) }).catch(() => { if (active) setRoutes(null) });
       } else {
-        setRoutes(null);
+        if (active) setRoutes(null);
       }
     } else {
-      setRoutes(null);
+      if (active) setRoutes(null);
     }
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReportId, reports]);
 
   if (reports.length === 0) {
@@ -71,8 +77,8 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
   }
 
   const selectedReport = reports.find(r => r.report_id === selectedReportId);
-  const wardFeature = showWards && selectedReport && (selectedReport.ward as any)?.ward_id && wardsLayer
-    ? wardsLayer.features.find((f: any) => f.properties.ward_id === (selectedReport.ward as any).ward_id)
+  const wardFeature = showWards && selectedReport && (selectedReport.ward as WardTag)?.status === "matched" && wardsLayer
+    ? wardsLayer.features.find((f: Feature) => f.properties?.ward_id === (selectedReport.ward as Extract<WardTag, { status: "matched" }>).ward_id)
     : null;
 
   return (
@@ -92,7 +98,7 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
 
         {wardFeature && (
           <GeoJSON 
-            key={(selectedReport?.ward as any).ward_id}
+            key={(selectedReport?.ward as Extract<WardTag, { status: "matched" }>).ward_id}
             data={wardFeature} 
             style={{ color: "#ff3333", weight: 2, fillOpacity: 0.2 }}
           />
@@ -125,8 +131,8 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
                   <p className="text-sm">{r.hazard_category}</p>
                   <p className="text-sm font-semibold">Sev: {r.severity_level}</p>
                   <p className="text-xs mt-1 text-slate-600">{r.raw_location}</p>
-                  {(r.ward as any)?.status === "matched" && (
-                    <p className="text-xs font-medium text-blue-600 mt-1">{(r.ward as any).ward_name}</p>
+                  {(r.ward as WardTag)?.status === "matched" && (
+                    <p className="text-xs font-medium text-blue-600 mt-1">{(r.ward as Extract<WardTag, { status: "matched" }>).ward_name}</p>
                   )}
                 </div>
               </Popup>

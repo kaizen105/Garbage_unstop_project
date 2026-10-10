@@ -28,6 +28,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("safaikavach_reports");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored) setReports(JSON.parse(stored));
     } catch {}
   }, []);

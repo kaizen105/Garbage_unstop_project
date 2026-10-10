@@ -1,5 +1,6 @@
 import * as turf from "@turf/turf";
 import { z } from "zod";
+import type { LineString } from "geojson";
 
 const depotLngLat = [77.1891, 28.6448] as [number, number]; // Karol Bagh area depot
 const transferLngLat = [77.2790, 28.5524] as [number, number]; // Okhla transfer station
@@ -42,24 +43,24 @@ export async function fetchRoute({ lat, lng }: { lat: number; lng: number }) {
   try {
     const plannedData = await fetchOsrm([depotLngLat, hazardLngLat, transferLngLat]);
     planned = {
-      geometry: plannedData.routes[0].geometry,
-      distance_m: plannedData.routes[0].distance,
-      duration_s: plannedData.routes[0].duration
+      geometry: plannedData.routes[0]?.geometry,
+      distance_m: plannedData.routes[0]?.distance,
+      duration_s: plannedData.routes[0]?.duration
     };
 
     let detourPoint = turf.destination(turf.point(hazardLngLat), 0.4, 90).geometry.coordinates as [number, number];
     let bypassData = await fetchOsrm([depotLngLat, detourPoint, transferLngLat]);
     
-    let dist = turf.pointToLineDistance(turf.point(hazardLngLat), bypassData.routes[0].geometry as turf.helpers.LineString, { units: 'kilometers' });
+    const dist = turf.pointToLineDistance(turf.point(hazardLngLat), bypassData.routes[0]?.geometry as LineString, { units: 'kilometers' });
     if (dist < 0.2) {
       detourPoint = turf.destination(turf.point(hazardLngLat), 0.4, -90).geometry.coordinates as [number, number];
       bypassData = await fetchOsrm([depotLngLat, detourPoint, transferLngLat]);
     }
     
     bypass = {
-      geometry: bypassData.routes[0].geometry,
-      distance_m: bypassData.routes[0].distance,
-      duration_s: bypassData.routes[0].duration
+      geometry: bypassData.routes[0]?.geometry,
+      distance_m: bypassData.routes[0]?.distance,
+      duration_s: bypassData.routes[0]?.duration
     };
 
     const dist1 = turf.distance(turf.point(hazardLngLat), turf.point(hazmat1LngLat));
@@ -68,9 +69,9 @@ export async function fetchRoute({ lat, lng }: { lat: number; lng: number }) {
 
     const hazmatData = await fetchOsrm([nearestHazmat, hazardLngLat]);
     hazmat = {
-      geometry: hazmatData.routes[0].geometry,
-      distance_m: hazmatData.routes[0].distance,
-      duration_s: hazmatData.routes[0].duration
+      geometry: hazmatData.routes[0]?.geometry,
+      distance_m: hazmatData.routes[0]?.distance,
+      duration_s: hazmatData.routes[0]?.duration
     };
 
     return { planned, bypass, hazmat, approximate: false };
