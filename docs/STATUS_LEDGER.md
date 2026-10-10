@@ -1,14 +1,10 @@
 ## Foundation
-- [x] F1  Next.js 16.4 + TS strict + Tailwind scaffold
-- [x] F2  Agent rules in .agent/rules + workflows
-- [x] F3  Docs files created
-- [x] F4  Folder structure + stubs
-- [x] F5  .env.example + git (git state UNVERIFIED, env keys STALE)
-- [x] F6  Cleanup: commit, 501 stubs, env/provider config, decisions
+- [x] F1-F6  Scaffold, rules, docs, env/provider config, cleanup (commit 81c5c91)
 
 ## Features
-- [ ] A1  Gnani Prisma STT client (+ audio validation)
-- [ ] A2  extractHazard(): OpenRouter + mock mode + think-strip + zod + retry
+- [x] A1  Gnani STT server client + /api/transcribe (validation, mock, retry)
+- [ ] A2  extractHazard(): OpenRouter + mock + think-strip + zod + retry
+- [ ] A3  Voice recorder component: hold-to-record, client-side WAV 16kHz, 30s cap
 - [ ] B1  Delhi ward GeoJSON + Turf.js tagging
 - [ ] B2  Leaflet map dashboard
 - [ ] C1  Routing: bypass + hazmat
@@ -21,6 +17,10 @@
 - D-001 Leaflet + OSM   D-002 swappable LLM, mock default
 - D-003 OpenRouter, non-reasoning for extraction, stronger model for audit
 
+## Known risks
+- Gnani 30s vs 60s limit conflict in docs -> cap at 30s
+- No STT confidence score -> use transcript length/empty checks instead
+- Evon hosted access unconfirmed (adapter later)
+
 ## Blocked / waiting on you
-- Gnani Prisma key (app.gnani.ai), OpenRouter key
-- Which Gnani STT docs page you found (for A1)
+- OpenRouter key (for A2)

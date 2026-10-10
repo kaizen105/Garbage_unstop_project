@@ -10,10 +10,24 @@ export const HazardCategorySchema = z.enum([
 ]);
 export type HazardCategory = z.infer<typeof HazardCategorySchema>;
 
+export const GnaniLanguageCodeSchema = z.enum([
+  "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", 
+  "ml-IN", "mr-IN", "pa-IN", "ta-IN", "te-IN"
+]);
+export type GnaniLanguageCode = z.infer<typeof GnaniLanguageCodeSchema>;
+
+export const GnaniErrorKindSchema = z.enum([
+  "INVALID_AUDIO", "AUDIO_TOO_LARGE", "AUDIO_TOO_LONG", 
+  "AUTH_OR_CREDITS", "RATE_LIMITED", "UPSTREAM_ERROR", 
+  "TIMEOUT", "EMPTY_TRANSCRIPT", "BAD_RESPONSE"
+]);
+export type GnaniErrorKind = z.infer<typeof GnaniErrorKindSchema>;
+
 export const GnaniTranscriptSchema = z.object({
   text: z.string().min(1).max(5000),
-  language: z.string(),
-  confidence: z.number().min(0).max(1),
+  language_code: GnaniLanguageCodeSchema,
+  request_id: z.string().optional(),
+  mock: z.boolean(),
 });
 export type GnaniTranscript = z.infer<typeof GnaniTranscriptSchema>;
 
