@@ -20,19 +20,17 @@ export interface HotspotRanking {
   likely_cause: string;
   suggested_department: string;
   projection: number;
+  area_landmark?: string;
 }
+
+import landmarks from "../../../data/delhi_landmarks.json";
+import * as turf from "@turf/turf";
 
 export function weeklyBuckets(reports: Report[], now: number = Date.now()): Record<string, WardBucket> {
   const buckets: Record<string, WardBucket> = {};
 
   for (const r of reports) {
-    // Basic ward matching based on location string. (Assuming seed data uses basic prefixes or we extract it)
-    let ward = "Unknown";
-    const loc = r.raw_location.toLowerCase();
-    if (loc.includes("connaught place") || loc.includes("cp")) ward = "Connaught Place";
-    else if (loc.includes("lajpat nagar")) ward = "Lajpat Nagar";
-    else if (loc.includes("karol bagh")) ward = "Karol Bagh";
-    else ward = r.raw_location; // Fallback
+    const ward = r.raw_location;
 
     const ageMs = now - new Date(r.createdAt || Date.now()).getTime();
     if (ageMs < 0 || ageMs > 4 * ONE_WEEK) continue; // Skip future or >4 weeks old
@@ -41,12 +39,13 @@ export function weeklyBuckets(reports: Report[], now: number = Date.now()): Reco
     if (weekIndex >= 4) continue;
 
     if (!buckets[ward]) {
-      buckets[ward] = { ward, counts: [0, 0, 0, 0], categoryCounts: {} };
+      buckets[ward] = { ward, counts: [0, 0, 0, 0], categoryCounts: {}, latestReports: [] } as any;
     }
 
     buckets[ward]!.counts[weekIndex as 0 | 1 | 2 | 3]++;
     if (weekIndex === 0) {
       buckets[ward]!.categoryCounts[r.hazard_category] = (buckets[ward]!.categoryCounts[r.hazard_category] || 0) + 1;
+      (buckets[ward] as any).latestReports.push(r);
     }
   }
 
@@ -135,6 +134,35 @@ export function rankHotspots(reports: Report[], now: number = Date.now(), n: num
 
     const details = getCategoryDetails(domCat);
 
+    // Compute nearest landmark
+    let area_landmark = undefined;
+    const latest = (b as any).latestReports as Report[];
+    if (latest.length > 0) {
+      // Find valid points
+      const points = latest
+        .filter(r => r.coordinates && !isNaN(r.coordinates.lat) && !isNaN(r.coordinates.lng))
+        .map(r => turf.point([r.coordinates!.lng, r.coordinates!.lat]));
+        
+      if (points.length > 0) {
+        const fc = turf.featureCollection(points);
+        const center = turf.center(fc);
+        
+        let nearest = null;
+        let minDist = Infinity;
+        for (const lm of landmarks) {
+          const lmPt = turf.point([lm.lng, lm.lat]);
+          const dist = turf.distance(center, lmPt, { units: "kilometers" });
+          if (dist <= 3 && dist < minDist) {
+            minDist = dist;
+            nearest = lm.name;
+          }
+        }
+        if (nearest) {
+          area_landmark = nearest;
+        }
+      }
+    }
+
     rankings.push({
       ward,
       risk: getRisk(score.anomaly_score, score.pct_change, score.this_week),
@@ -145,7 +173,8 @@ export function rankHotspots(reports: Report[], now: number = Date.now(), n: num
       dominant_category: domCat,
       likely_cause: details.cause,
       suggested_department: details.dept,
-      projection: projectNextWeek(b.counts)
+      projection: projectNextWeek(b.counts),
+      area_landmark
     });
   }
 

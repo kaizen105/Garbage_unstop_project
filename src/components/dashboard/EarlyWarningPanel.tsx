@@ -1,11 +1,22 @@
 import { Report } from "@/lib/store/reports";
-import { rankHotspots, weeklyBuckets, WardBucket } from "@/lib/early-warning/trends";
+import { rankHotspots } from "@/lib/early-warning/trends";
 import { useMemo } from "react";
+import { humanizeCategory } from "@/lib/utils/format";
 
 interface EarlyWarningPanelProps {
   reports: Report[];
   onSelectWard: (wardName: string) => void;
 }
+
+const catColors: Record<string, string> = {
+  construction_debris: "#94a3b8",
+  biohazard_medical: "#ef4444",
+  general_overflow: "#eab308",
+  chemical: "#a855f7",
+  electrical_hazard: "#f97316",
+  unknown: "#64748b",
+  dead_animal: "#14b8a6",
+};
 
 export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelProps) {
   const hotspots = useMemo(() => rankHotspots(reports), [reports]);
@@ -23,12 +34,24 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
   const highestRiskWard = hotspots.length > 0 ? hotspots[0]!.ward : "None";
 
   // Calculate citywide totals by week by category
-  const buckets = weeklyBuckets(reports);
-  const citywide: [number, number, number, number] = [0, 0, 0, 0];
-  for (const b of Object.values(buckets) as WardBucket[]) {
-    for (let i = 0; i < 4; i++) {
-      const idx = i as 0 | 1 | 2 | 3;
-      citywide[idx] = (citywide[idx] || 0) + (b.counts[idx] || 0);
+  const citywideByWeekAndCategory = [
+    { week: "W-3", total: 0, counts: {} as Record<string, number> },
+    { week: "W-2", total: 0, counts: {} as Record<string, number> },
+    { week: "W-1", total: 0, counts: {} as Record<string, number> },
+    { week: "W0", total: 0, counts: {} as Record<string, number> }
+  ];
+
+  for (const r of reports) {
+    const ageMs = Date.now() - new Date(r.createdAt || Date.now()).getTime();
+    const weekIndex = Math.floor(ageMs / (7 * 24 * 60 * 60 * 1000));
+    if (weekIndex >= 0 && weekIndex < 4) {
+       const w = 3 - weekIndex;
+       const cat = r.hazard_category || "unknown";
+       const weekData = citywideByWeekAndCategory[w];
+       if (weekData) {
+         weekData.counts[cat] = (weekData.counts[cat] || 0) + 1;
+         weekData.total++;
+       }
     }
   }
 
@@ -63,7 +86,8 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
             <div key={h.ward} className="bg-slate-800 rounded-lg p-4 flex gap-6 items-center border border-slate-700 hover:border-slate-500 cursor-pointer transition-colors" onClick={() => onSelectWard(h.ward)}>
               <div className="text-slate-500 font-bold w-6">#{idx + 1}</div>
               <div className="w-48">
-                <div className="font-bold text-lg">{h.ward}</div>
+                <div className="font-bold text-lg truncate" title={h.ward}>{h.ward}</div>
+                {h.area_landmark && <div className="text-xs text-slate-400 mt-0.5 truncate" title={`near ${h.area_landmark}`}>near {h.area_landmark}</div>}
                 <div className={`inline-block px-2 py-0.5 mt-1 rounded text-xs border ${riskColors[h.risk]}`}>
                   {h.risk.toUpperCase()}
                 </div>
@@ -85,7 +109,7 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
                 </div>
               </div>
               <div className="flex-1 text-sm text-slate-300 grid grid-cols-2 gap-2">
-                <div><span className="text-slate-500">Dominant:</span> <br/>{h.dominant_category}</div>
+                <div><span className="text-slate-500">Dominant:</span> <br/>{humanizeCategory(h.dominant_category)}</div>
                 <div><span className="text-slate-500">Likely cause:</span> <br/>{h.likely_cause}</div>
                 <div className="col-span-2"><span className="text-slate-500">Suggested Dept:</span> {h.suggested_department}</div>
               </div>
@@ -103,18 +127,69 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
 
       <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 mt-4">
         <h3 className="text-lg font-bold text-slate-200 mb-4">Citywide Trend (All Hazards)</h3>
-        <div className="flex items-end gap-8 h-32 pl-4">
-          {citywide.map((val, i) => {
-            const maxVal = Math.max(...citywide, 1);
-            return (
-              <div key={i} className="flex flex-col items-center flex-1">
-                <div className="w-full max-w-[60px] bg-slate-600 rounded-t relative group flex items-end justify-center" style={{ height: `${(val / maxVal) * 100}%` }}>
-                  <span className="mb-2 font-bold text-white text-xs z-10">{val}</span>
-                </div>
-                <div className="mt-2 text-xs text-slate-400">Week -{3-i}</div>
+        <div className="flex gap-8 items-start">
+          <svg width="400" height="200" className="bg-slate-900 rounded">
+            {/* Axis */}
+            <line x1="40" y1="160" x2="380" y2="160" stroke="#475569" strokeWidth="2" />
+            <line x1="40" y1="20" x2="40" y2="160" stroke="#475569" strokeWidth="2" />
+            
+            {/* Bars */}
+            {(() => {
+              const maxWeeklyTotal = Math.max(...citywideByWeekAndCategory.map(w => w.total), 1);
+              const chartHeight = 140; // 160 - 20
+              const barWidth = 40;
+              const gap = (340 - (4 * barWidth)) / 5; // spacing
+              
+              return citywideByWeekAndCategory.map((w, i) => {
+                const x = 40 + gap + i * (barWidth + gap);
+                // Minimum bar height logic: total height must be at least 4px if total > 0
+                const minTotalHeight = w.total > 0 ? 4 : 0;
+                let scaleHeight = (w.total / maxWeeklyTotal) * chartHeight;
+                if (scaleHeight < minTotalHeight) scaleHeight = minTotalHeight;
+                
+                let yOffset = 160;
+                
+                // Sort categories to have consistent stacking order
+                const activeCats = Object.keys(w.counts).sort();
+                
+                const rects = activeCats.map(cat => {
+                  const count = w.counts[cat]!;
+                  const rectHeight = (count / w.total) * scaleHeight;
+                  yOffset -= rectHeight;
+                  return (
+                    <rect 
+                      key={cat} 
+                      x={x} 
+                      y={yOffset} 
+                      width={barWidth} 
+                      height={rectHeight} 
+                      fill={catColors[cat] || catColors.unknown} 
+                    />
+                  );
+                });
+                
+                return (
+                  <g key={i}>
+                    {rects}
+                    <text x={x + barWidth/2} y={160 - scaleHeight - 5} fill="#f8fafc" fontSize="12" textAnchor="middle" fontWeight="bold">
+                      {w.total > 0 ? w.total : ""}
+                    </text>
+                    <text x={x + barWidth/2} y="175" fill="#94a3b8" fontSize="12" textAnchor="middle">
+                      {w.week}
+                    </text>
+                  </g>
+                );
+              });
+            })()}
+          </svg>
+          <div className="flex flex-col gap-2">
+            {Object.keys(catColors).map(cat => (
+              <div key={cat} className="flex items-center gap-2 text-xs text-slate-300">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: catColors[cat] }}></div>
+                {humanizeCategory(cat)}
               </div>
-            )
-          })}
+            ))}
+          </div>
         </div>
       </div>
       

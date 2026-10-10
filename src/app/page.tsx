@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { EarlyWarningPanel } from "@/components/dashboard/EarlyWarningPanel";
 import { estimateImpact } from "@/lib/finance/impact";
+import { humanizeCategory } from "@/lib/utils/format";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then(m => m.HazardMap), { ssr: false });
 
@@ -58,13 +59,13 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="flex flex-col md:flex-row flex-1 min-h-0">
-        <div className="w-full md:w-[380px] flex flex-col border-r border-slate-800 bg-slate-900 overflow-y-auto">
-          <div className="p-4 border-b border-slate-800 shrink-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 md:h-full h-auto overflow-y-auto md:overflow-hidden">
+        <div className="w-full md:w-[380px] flex flex-col border-r border-slate-800 bg-slate-900 md:overflow-y-auto p-4 gap-4 shrink-0">
+          <div className="border-b border-slate-800 shrink-0 pb-4">
             <VoiceReporter />
           </div>
           
-          <div className="p-4 flex-1">
+          <div className="flex-1">
             <h2 className="text-lg font-semibold mb-4 text-slate-200">Recent Reports</h2>
             <div className="space-y-3">
               {reports.map(r => (
@@ -77,7 +78,7 @@ export default function Dashboard() {
                     <span className="font-mono text-xs text-slate-400">{r.report_id}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${r.severity_level >= 7 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>Sev {r.severity_level}</span>
                   </div>
-                  <h3 className="font-medium mt-1 truncate">{r.hazard_category}</h3>
+                  <h3 className="font-medium mt-1 truncate">{humanizeCategory(r.hazard_category)}</h3>
                   <p className="text-sm text-slate-500 truncate">{r.raw_location}</p>
                 </div>
               ))}
@@ -88,9 +89,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col bg-slate-800 min-h-0 relative">
-          <div className="absolute top-0 left-0 right-0 z-[1000] flex justify-center mt-2 pointer-events-none">
-            <div className="bg-slate-900 rounded-full border border-slate-700 p-1 flex gap-1 pointer-events-auto shadow-lg">
+        <div className="flex-1 flex flex-col bg-slate-800 min-h-[500px] md:min-h-0 relative">
+          <div className="bg-slate-900 border-b border-slate-700 p-2 flex justify-center shrink-0">
+            <div className="bg-slate-950 rounded-full border border-slate-800 p-1 flex gap-1">
               <button 
                 onClick={() => setActiveTab("map")} 
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === "map" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
@@ -107,14 +108,13 @@ export default function Dashboard() {
           </div>
 
           <div className={`flex flex-col h-full ${activeTab === "map" ? "flex" : "hidden"}`}>
-            <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap">
+            <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap items-center">
             <div>Total: <span className="font-bold text-white">{total}</span></div>
             <div>High Sev: <span className="font-bold text-red-400">{highSev}</span></div>
             <div>Avg Sev: <span className="font-bold text-yellow-400">{avgSev}</span></div>
             <div>Hazmat: <span className="font-bold text-orange-400">{hazmat}</span></div>
-            <div title="See src/lib/finance/assumptions.ts" className="cursor-help border-b border-dashed border-slate-500">
-              Estimated Net Prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
-              <span className="text-[10px] ml-1 text-slate-500">(illustrative)</span>
+            <div title="Estimated (illustrative assumptions)" className="cursor-help border-b border-dashed border-slate-500">
+              Est. prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
             </div>
             
             <button 
@@ -136,7 +136,7 @@ export default function Dashboard() {
                 </h3>
                 <div className="space-y-2 text-sm text-slate-300">
                   <p><strong className="text-slate-100">Ward:</strong> {auditResult.ward as string} <span className="text-red-400">(+{auditResult.pct_increase as number}% anomaly)</span></p>
-                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {auditResult.dominant_anomaly as string}</p>
+                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {humanizeCategory(auditResult.dominant_anomaly as string)}</p>
                   <p><strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause as string}</p>
                   <p><strong className="text-slate-100">Recommended Action:</strong> {auditResult.recommendation as string}</p>
                 </div>

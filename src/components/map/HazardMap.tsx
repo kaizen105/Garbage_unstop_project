@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Circle, Popup, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Circle, CircleMarker, Popup, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useReports } from "@/lib/store/reports";
 import type { GeoJsonObject } from "geojson";
@@ -12,6 +12,7 @@ import { weeklyBuckets } from "@/lib/early-warning/trends";
 
 import { WardTag } from "@/lib/spatial/wards";
 import type { FeatureCollection, Feature } from "geojson";
+import { humanizeCategory } from "@/lib/utils/format";
 
 async function fetchRoute(coords: { lat: number; lng: number }) {
   const res = await fetch("/api/route", {
@@ -137,7 +138,7 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult, selec
 
   return (
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
-      <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: "100%", width: "100%", zIndex: 1 }}>
+      <MapContainer bounds={[[28.50,77.05],[28.72,77.32]]} maxZoom={12} style={{ height: "100%", width: "100%", zIndex: 1 }}>
         <TileLayer
           attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -183,33 +184,41 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult, selec
         {reports.map(r => {
           if (!r.coordinates) return null;
           const color = r.severity_level >= 7 ? "#ef4444" : "#eab308";
+          const markerRadius = r.severity_level >= 7 ? 9 : 6;
           return (
-            <Circle 
-              key={r.report_id}
-              center={[r.coordinates.lat, r.coordinates.lng]}
-              radius={150}
-              pathOptions={{ color, fillColor: color, fillOpacity: 0.5 }}
-              eventHandlers={{ click: () => onSelectReport(r.report_id) }}
-            >
-              <Popup>
-                <div className="text-slate-900">
-                  <h3 className="font-bold">{r.report_id}</h3>
-                  <p className="text-sm">{r.hazard_category}</p>
-                  <p className="text-sm font-semibold">Sev: {r.severity_level}</p>
-                  <p className="text-xs mt-1 text-slate-600">{r.raw_location}</p>
-                  {(r.ward as WardTag)?.status === "matched" && (
-                    <p className="text-xs font-medium text-blue-600 mt-1">{(r.ward as Extract<WardTag, { status: "matched" }>).ward_name}</p>
-                  )}
-                </div>
-              </Popup>
-            </Circle>
+            <div key={r.report_id}>
+              <Circle 
+                center={[r.coordinates.lat, r.coordinates.lng]}
+                radius={150}
+                pathOptions={{ color, fillColor: color, fillOpacity: 0.1, weight: 1 }}
+                eventHandlers={{ click: () => onSelectReport(r.report_id) }}
+              />
+              <CircleMarker
+                center={[r.coordinates.lat, r.coordinates.lng]}
+                radius={markerRadius}
+                pathOptions={{ color: "#fff", fillColor: color, fillOpacity: 0.9, weight: 1 }}
+                eventHandlers={{ click: () => onSelectReport(r.report_id) }}
+              >
+                <Popup>
+                  <div className="text-slate-900">
+                    <h3 className="font-bold">{r.report_id}</h3>
+                    <p className="text-sm">{humanizeCategory(r.hazard_category)}</p>
+                    <p className="text-sm font-semibold">Sev: {r.severity_level}</p>
+                    <p className="text-xs mt-1 text-slate-600">{r.raw_location}</p>
+                    {(r.ward as WardTag)?.status === "matched" && (
+                      <p className="text-xs font-medium text-blue-600 mt-1">{(r.ward as Extract<WardTag, { status: "matched" }>).ward_name}</p>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            </div>
           );
         })}
 
         <MapUpdater reports={reports} selectedId={selectedReportId} selectedWardName={selectedWardName} wardsLayer={wardsLayer} />
       </MapContainer>
 
-      <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end">
+      <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-stretch w-36">
         <button 
           onClick={() => setShowWards(!showWards)}
           className={`px-3 py-1.5 text-xs rounded shadow-md border ${showWards ? 'bg-blue-600 text-white border-blue-700' : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800'}`}

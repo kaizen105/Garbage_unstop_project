@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { humanizeCategory } from "@/lib/utils/format";
 
 interface ReportResult {
   report: {
@@ -235,7 +236,7 @@ export function VoiceReporter() {
         <div className="border p-4 rounded-lg bg-green-50 text-black">
           <h3 className="font-bold text-green-700 mb-2">Report Generated!</h3>
           <p className="text-sm"><strong>ID:</strong> {result.report.report_id}</p>
-          <p className="text-sm"><strong>Category:</strong> {result.report.hazard_category}</p>
+          <p className="text-sm"><strong>Category:</strong> {humanizeCategory(result.report.hazard_category)}</p>
           <p className="text-sm"><strong>Severity:</strong> {result.report.severity_level}/10</p>
           <p className="text-sm"><strong>Location:</strong> {result.report.raw_location}</p>
           <p className="text-sm"><strong>Action:</strong> {result.report.action_required}</p>
