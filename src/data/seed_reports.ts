@@ -1,8 +1,8 @@
 import rawSeed from "../../data/seed_raw.json";
-import { Report } from "@/lib/store/reports";
+import { Report } from "../lib/store/reports";
 import { z } from "zod";
-import { getActionRequired } from "@/app/api/report/route";
-import { tagWard } from "@/lib/spatial/wards";
+import { getActionRequired } from "../app/api/report/route";
+import { tagWard } from "../lib/spatial/wards";
 import * as turf from "@turf/turf";
 
 const ONE_DAY = 24 * 60 * 60 * 1000;

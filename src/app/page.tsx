@@ -87,6 +87,11 @@ export default function Dashboard() {
                   </div>
                   <h3 className="font-medium mt-1 truncate">{humanizeCategory(r.hazard_category)}</h3>
                   <p className="text-sm text-slate-500 truncate">{r.raw_location}</p>
+                  {!r.coordinates && (
+                    <span className="text-[10px] bg-red-900/50 text-red-300 px-1.5 py-0.5 rounded mt-1 inline-block">
+                      Location not resolved
+                    </span>
+                  )}
                 </div>
               ))}
               {reports.length === 0 && (

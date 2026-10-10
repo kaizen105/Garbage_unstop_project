@@ -2,7 +2,9 @@
 
 **Tagline:** AI-powered voice dispatch and predictive hazard routing for municipal sanitation workers.
 
-SafaiKavach is a comprehensive municipal dispatch engine built to protect sanitation workers from encountering hazardous materials without warning. By enabling voice-based incident reporting via an intuitive field interface, the platform translates unstructured worker voice notes into structured geographic and logistical data. This allows municipal fleet managers to dynamically reroute standard collection vehicles while dispatching specialized hazmat teams, minimizing exposure and improving urban sanitation efficiency. 
+SafaiKavach is a comprehensive municipal dispatch engine built to protect sanitation workers from encountering hazardous materials without warning. By enabling voice-based incident reporting via an intuitive field interface, the platform translates unstructured worker voice notes into structured geographic and logistical data. 
+
+**Live Demo URL:** [https://safaikavach-demo.vercel.app](https://safaikavach-demo.vercel.app) (Placeholder)
 
 ## The Problem
 Sanitation workers frequently encounter hazardous waste (medical waste, dangerous chemicals, or heavy industrial debris) on standard routes without prior warning. Current systems lack a structured mechanism for field workers to instantly report anomalies, leaving them vulnerable to health risks and causing collection delays. Furthermore, fleet managers operate blindly without historical spatial data to identify recurring hazardous hotspots, leading to inefficient routing and escalating mitigation costs.
@@ -14,10 +16,11 @@ Sanitation workers frequently encounter hazardous waste (medical waste, dangerou
 - **Live Map Dashboard:** Interactive geographic interface displaying real-time incidents categorized by severity, with hotspot shading indicating weekly trends.
 - **Hazard Bypass & Hazmat Routing:** Calculates adaptive OSRM routes, standardizing a bypass route for regular fleet and a direct route for specialized cleanup crews.
 - **Estimated Financial Impact:** Logs a real-time ledger of simulated municipal savings derived from prevented exposure, injuries, and routing overhead.
-- **Weekly Root-Cause Audit:** Triggers an automated LLM-driven root-cause investigation across incident clusters, identifying systemic compliance failures.
-- **Early Warning Hotspots:** Utilizes anomalous incident spike detection across municipal wards to project impending risks and assign predictive threat levels.
+- **Weekly Root-Cause Audit:** Triggers an automated LLM-driven root-cause investigation across incident clusters.
+- **Early Warning Hotspots:** Utilizes anomalous incident spike detection across municipal wards.
 
 ## Architecture
+*(See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full diagrams and design decisions)*
 
 ```mermaid
 flowchart TD
@@ -113,13 +116,12 @@ npm run build
 | `/api/audit` | POST | `{ cluster: HazardReport[] }` | `{ root_cause, mitigation }` |
 | `/api/wards` | GET | None | Delhi MCD GeoJSON FeatureCollection |
 
-## Data & Honesty Declaration
-- **Synthetic Demo Data:** All incident reports are artificially generated (`src/data/seed_reports.ts`) to simulate a 4-week historical trend.
-- **Illustrative Financials:** Cost figures (in INR) representing prevented damages are hardcoded assumptions (`src/lib/finance/assumptions.ts`) and do not reflect real-world municipal budgets.
-- **Ward Boundaries:** The spatial map utilizes DataMeet's historical open-source Delhi MCD ward boundaries, which may predate the 2022 MCD delimitation.
-- **Routing Engine:** We utilize the public OSRM demo server for route approximations.
-- **Predictive Anomalies:** The "Early Warning" system employs a naive statistical anomaly detection model (standard deviations over a 4-week window) and trend extrapolation, not a trained neural network.
-- **LLM Infrastructure:** The LLM adapter leverages an OpenAI-compatible interface via OpenRouter. While an Evon-ready adapter was built, it is not wired live due to access limitations.
+## Limits & Honest Declaration
+- **Data & Storage:** All incident reports are synthetic (`src/data/seed_reports.ts`). Submitted reports are only saved to your browser's `localStorage`. The Prisma schema is included but not wired to a live database.
+- **Financials:** Cost figures (in INR) representing prevented damages are illustrative assumptions (`src/lib/finance/assumptions.ts`) and do not reflect real-world municipal budgets.
+- **Geography & Routing:** The spatial map utilizes DataMeet's historical open-source Delhi MCD ward boundaries. We use arbitrary coordinates for demo depots, and we rely on the public OSRM demo server for route approximations.
+- **Predictive Anomalies:** The "Early Warning" system employs a naive statistical anomaly detection model (standard deviations over a 4-week window) plus basic trend extrapolation. It is **not** a trained machine learning forecast model.
+- **LLM Infrastructure:** The LLM adapter leverages an OpenAI-compatible interface via OpenRouter. While an Evon-ready adapter (`evon`) was built, it is not wired live.
 
 ## Project Structure
 ```

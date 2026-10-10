@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { humanizeCategory } from "@/lib/utils/format";
+import { useReports } from "@/lib/store/reports";
 
 interface ReportResult {
   report: {
@@ -22,6 +23,7 @@ export function VoiceReporter() {
   const [time, setTime] = useState(30);
   const [result, setResult] = useState<ReportResult | null>(null);
   const [textInput, setTextInput] = useState("");
+  const { addReport } = useReports();
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
@@ -150,6 +152,7 @@ export function VoiceReporter() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Server error");
       setResult(data);
+      if (data.report) addReport(data.report);
       setState("success");
     } catch (err: unknown) {
       setState("error");
@@ -175,6 +178,7 @@ export function VoiceReporter() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Server error");
       setResult(data);
+      if (data.report) addReport(data.report);
       setState("success");
     } catch (err: unknown) {
       setState("error");
