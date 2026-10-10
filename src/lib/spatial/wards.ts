@@ -28,8 +28,8 @@ export function tagWard(coords: { lat: number; lng: number } | null): WardTag {
       if (turf.booleanPointInPolygon(pt, feature)) {
         return {
           status: "matched",
-          ward_id: feature.properties.ward_id,
-          ward_name: feature.properties.ward_name
+          ward_id: feature.properties?.ward_id,
+          ward_name: feature.properties?.ward_name
         };
       }
     }

@@ -42,11 +42,24 @@ function MapUpdater({ reports, selectedId }: { reports: { coordinates: { lat: nu
   return null;
 }
 
+interface RouteData {
+  geometry: any;
+  distance_m: number;
+  duration_s: number;
+}
+
+interface RoutesState {
+  planned?: RouteData;
+  bypass?: RouteData;
+  hazmat?: RouteData;
+  approximate?: boolean;
+}
+
 export function HazardMap({ selectedReportId, onSelectReport }: { selectedReportId: string | null, onSelectReport: (id: string) => void }) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
-  const [routes, setRoutes] = useState<Record<string, unknown> | null>(null);
+  const [routes, setRoutes] = useState<RoutesState | null>(null);
 
   useEffect(() => {
     fetch("/api/wards").then(r => r.json()).then((data: FeatureCollection) => setWardsLayer(data)).catch(() => {});
@@ -59,13 +72,14 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
       if (report && report.coordinates && (report.action_required.includes("bypass") || report.action_required.includes("hazmat"))) {
         fetchRoute(report.coordinates).then(r => { if (active) setRoutes(r) }).catch(() => { if (active) setRoutes(null) });
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (active) setRoutes(null);
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (active) setRoutes(null);
     }
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReportId, reports]);
 
   if (reports.length === 0) {
