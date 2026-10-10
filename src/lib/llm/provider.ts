@@ -46,7 +46,19 @@ export async function chat(messages: { role: string; content: string }[], model?
   }
 
   if (!res.ok) {
-    throw new Error(`LLM returned ${res.status}`);
+    let errorDetail = "";
+    try {
+      const errJson = await res.json();
+      errorDetail = JSON.stringify(errJson);
+    } catch {
+      try {
+        errorDetail = await res.text();
+      } catch {
+        errorDetail = "";
+      }
+    }
+    console.error(`[LLM Error] Status: ${res.status}, Model: ${payload.model}, Details: ${errorDetail}`);
+    throw new Error(`LLM returned ${res.status} for model "${payload.model}": ${errorDetail || "No details"}`);
   }
 
   const data = await res.json();
