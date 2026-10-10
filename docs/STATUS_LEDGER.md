@@ -8,10 +8,10 @@
 - [x] B1  Delhi ward GeoJSON + Turf.js tagging
 - [x] B2  Leaflet map dashboard
 - [x] C1  Routing: bypass + hazmat
-- [ ] C2  Financial impact logging
-- [ ] D1  Prisma ORM schema (User, Report, Ward)
-- [ ] D2  Weekly audit job
-- [ ] E1  README, 120s pitch script, demo seed data
+- [x] C2  Financial impact logging
+- [x] D1  Prisma ORM schema (User, Report, Ward)
+- [x] D2  Weekly audit job
+- [x] G1  Demo wiring and seed data
 
 ## Decisions
 - D-001 Leaflet + OSM   D-002 swappable LLM, mock default

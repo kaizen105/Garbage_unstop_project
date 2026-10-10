@@ -199,6 +199,12 @@ export function VoiceReporter() {
             className="w-full p-2 border rounded-md text-black"
             placeholder="Describe the hazard in Hindi or English..."
           />
+          <div className="flex flex-col gap-2 my-2">
+            <span className="text-xs text-slate-500">Try a sample:</span>
+            <button onClick={() => setTextInput("medical waste dumped near Karol Bagh metro pillar 44")} className="text-left text-xs bg-slate-100 p-2 rounded text-black hover:bg-slate-200">medical waste at Karol Bagh metro pillar 44</button>
+            <button onClick={() => setTextInput("heavy rubble and exposed electrical wiring near Connaught Place")} className="text-left text-xs bg-slate-100 p-2 rounded text-black hover:bg-slate-200">rubble and exposed wiring near Connaught Place</button>
+            <button onClick={() => setTextInput("huge garbage overflow happening in Lajpat Nagar")} className="text-left text-xs bg-slate-100 p-2 rounded text-black hover:bg-slate-200">garbage overflow in Lajpat Nagar</button>
+          </div>
           <button onClick={submitText} className="w-full py-2 bg-blue-500 text-white rounded-md">Submit Text</button>
         </>
       )}

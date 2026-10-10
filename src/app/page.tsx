@@ -4,6 +4,7 @@ import { VoiceReporter } from "@/components/voice/VoiceReporter";
 import { useReports } from "@/lib/store/reports";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { estimateImpact } from "@/lib/finance/impact";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then(m => m.HazardMap), { ssr: false });
 
@@ -15,6 +16,26 @@ export default function Dashboard() {
   const highSev = reports.filter(r => r.severity_level >= 7).length;
   const avgSev = total > 0 ? (reports.reduce((a, b) => a + b.severity_level, 0) / total).toFixed(1) : "0.0";
   const hazmat = reports.filter(r => r.action_required.includes("hazmat")).length;
+  const totalNetInr = reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
+
+  const [auditResult, setAuditResult] = useState<any>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+
+  const runAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const res = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reports })
+      });
+      const data = await res.json();
+      setAuditResult(data);
+    } catch {
+      setAuditResult({ error: "Failed to run audit" });
+    }
+    setIsAuditing(false);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
@@ -65,6 +86,10 @@ export default function Dashboard() {
             <div>High Sev: <span className="font-bold text-red-400">{highSev}</span></div>
             <div>Avg Sev: <span className="font-bold text-yellow-400">{avgSev}</span></div>
             <div>Hazmat: <span className="font-bold text-orange-400">{hazmat}</span></div>
+            <div title="See src/lib/finance/assumptions.ts" className="cursor-help border-b border-dashed border-slate-500">
+              Estimated Net Prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
+              <span className="text-[10px] ml-1 text-slate-500">(illustrative)</span>
+            </div>
           </div>
           <div className="flex-1 relative z-0">
             <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} />

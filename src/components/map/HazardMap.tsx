@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { useReports } from "@/lib/store/reports";
 import { isDemoBoundaries } from "@/lib/spatial/wards";
 import L from "leaflet";
+import { estimateImpact } from "@/lib/finance/impact";
 
 import { WardTag } from "@/lib/spatial/wards";
 import type { FeatureCollection, Feature } from "geojson";
@@ -55,7 +56,7 @@ interface RoutesState {
   approximate?: boolean;
 }
 
-export function HazardMap({ selectedReportId, onSelectReport }: { selectedReportId: string | null, onSelectReport: (id: string) => void }) {
+export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any }) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
@@ -115,6 +116,14 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
             key={(selectedReport?.ward as Extract<WardTag, { status: "matched" }>).ward_id}
             data={wardFeature} 
             style={{ color: "#ff3333", weight: 2, fillOpacity: 0.2 }}
+          />
+        )}
+
+        {auditResult && auditResult.status === "success" && auditResult.centroid && (
+          <Circle 
+            center={[auditResult.centroid.lat, auditResult.centroid.lng]}
+            radius={1500}
+            pathOptions={{ color: 'purple', dashArray: '5, 10', fillOpacity: 0.1, weight: 2 }} 
           />
         )}
 
@@ -191,6 +200,12 @@ export function HazardMap({ selectedReportId, onSelectReport }: { selectedReport
             <div className="flex items-center gap-2">
               <div className="w-3 h-0 border-t-2 border-orange-500"></div>
               <span>Hazmat: {(routes.hazmat.distance_m / 1000).toFixed(1)}km, {Math.round(routes.hazmat.duration_s / 60)}min</span>
+            </div>
+          )}
+          {selectedReport && (
+            <div className="mt-2 pt-2 border-t border-slate-700">
+              <div title="See src/lib/finance/assumptions.ts" className="font-bold cursor-help border-b border-dashed border-slate-500 inline-block">Estimated Net Damage Prevented:</div>
+              <div className="text-green-400 font-bold mt-1">₹{estimateImpact(selectedReport, routes).net_inr.toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">(illustrative assumptions)</span></div>
             </div>
           )}
         </div>

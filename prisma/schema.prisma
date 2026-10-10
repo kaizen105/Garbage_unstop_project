@@ -1,0 +1,88 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  DRIVER
+  DISPATCHER
+  ADMIN
+}
+
+enum HazardCategory {
+  biohazard_medical
+  construction_debris
+  electrical_hazard
+  chemical
+  general_overflow
+  unknown
+}
+
+enum ReportStatus {
+  OPEN
+  DISPATCHED
+  RESOLVED
+}
+
+enum ActionRequired {
+  dispatch_hazmat_bypass_standard
+  bypass_standard
+  routine_collection
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  role      Role     @default(DRIVER)
+  wardId    String?
+  ward      Ward?    @relation(fields: [wardId], references: [id])
+  reports   Report[]
+  createdAt DateTime @default(now())
+}
+
+model Ward {
+  id         String     @id @default(cuid())
+  externalId String     @unique
+  name       String
+  users      User[]
+  reports    Report[]
+  audits     AuditRun[]
+}
+
+model Report {
+  id                    String         @id
+  hazardCategory        HazardCategory
+  severityLevel         Int
+  rawLocation           String
+  lat                   Float?
+  lng                   Float?
+  transcript            String
+  transcriptMock        Boolean        @default(false)
+  actionRequired        ActionRequired
+  status                ReportStatus   @default(OPEN)
+  estimatedPreventedInr Int?
+  reporterId            String?
+  reporter              User?          @relation(fields: [reporterId], references: [id])
+  wardId                String?
+  ward                  Ward?          @relation(fields: [wardId], references: [id])
+  createdAt             DateTime       @default(now())
+  resolvedAt            DateTime?
+
+  @@index([wardId, createdAt])
+}
+
+model AuditRun {
+  id              String   @id @default(cuid())
+  wardId          String?
+  ward            Ward?    @relation(fields: [wardId], references: [id])
+  weekStart       DateTime
+  dominantAnomaly String
+  rootCause       String
+  recommendation  String
+  createdAt       DateTime @default(now())
+}

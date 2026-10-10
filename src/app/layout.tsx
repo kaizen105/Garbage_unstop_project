@@ -15,8 +15,9 @@ const geistMono = Geist_Mono({
 import { ReportsProvider } from "@/lib/store/reports";
 
 export const metadata: Metadata = {
-  title: "SafaiKavach - AI Municipal Dispatch Engine",
+  title: "SafaiKavach - AI Municipal Dispatch & Audit Engine",
   description: "AI Municipal Dispatch Engine",
+  themeColor: "#0f172a"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
