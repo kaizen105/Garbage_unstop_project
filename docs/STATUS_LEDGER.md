@@ -5,9 +5,9 @@
 - [x] A1  Gnani STT server client + /api/transcribe (validation, mock, retry)
 - [x] A2  extractHazard(): OpenRouter + mock + think-strip + zod + retry
 - [x] A3  Voice recorder component: hold-to-record, client-side WAV 16kHz, 30s cap
-- [ ] B1  Delhi ward GeoJSON + Turf.js tagging
-- [ ] B2  Leaflet map dashboard
-- [ ] C1  Routing: bypass + hazmat
+- [x] B1  Delhi ward GeoJSON + Turf.js tagging
+- [x] B2  Leaflet map dashboard
+- [x] C1  Routing: bypass + hazmat
 - [ ] C2  Financial impact logging
 - [ ] D1  Prisma ORM schema (User, Report, Ward)
 - [ ] D2  Weekly audit job

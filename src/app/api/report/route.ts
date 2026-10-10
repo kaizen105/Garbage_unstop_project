@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { transcribeAudio, GnaniError } from "../../../lib/gnani/prisma";
 import { extractHazard } from "../../../lib/llm/extract";
 import { resolveCoordinates } from "../../../lib/spatial/locate";
+import { tagWard } from "../../../lib/spatial/wards";
 import { z } from "zod";
 
 const JsonBodySchema = z.object({
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       raw_location: extraction.raw_location,
       coordinates: coords ? { lat: coords.lat, lng: coords.lng } : null,
       action_required,
-      ward: null
+      ward: tagWard(coords ? { lat: coords.lat, lng: coords.lng } : null)
     };
 
     return NextResponse.json({
