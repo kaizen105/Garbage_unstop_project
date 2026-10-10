@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Circle, Popup, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useReports } from "@/lib/store/reports";
+import type { GeoJsonObject } from "geojson";
 import { isDemoBoundaries } from "@/lib/spatial/wards";
 import L from "leaflet";
 import { estimateImpact } from "@/lib/finance/impact";
@@ -128,13 +129,13 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult }: { s
         )}
 
         {routes?.planned && (
-          <GeoJSON key={`planned-${selectedReportId}`} data={routes.planned.geometry as any} style={{ color: "#888", weight: 3, dashArray: "5, 10" }} />
+          <GeoJSON key={`planned-${selectedReportId}`} data={routes.planned.geometry as GeoJsonObject} style={{ color: "#888", weight: 3, dashArray: "5, 10" }} />
         )}
         {routes?.bypass && (
-          <GeoJSON key={`bypass-${selectedReportId}`} data={routes.bypass.geometry as any} style={{ color: "#22c55e", weight: 4 }} />
+          <GeoJSON key={`bypass-${selectedReportId}`} data={routes.bypass.geometry as GeoJsonObject} style={{ color: "#22c55e", weight: 4 }} />
         )}
         {routes?.hazmat && (
-          <GeoJSON key={`hazmat-${selectedReportId}`} data={routes.hazmat.geometry as any} style={{ color: "#f97316", weight: 4 }} />
+          <GeoJSON key={`hazmat-${selectedReportId}`} data={routes.hazmat.geometry as GeoJsonObject} style={{ color: "#f97316", weight: 4 }} />
         )}
 
         {reports.map(r => {
