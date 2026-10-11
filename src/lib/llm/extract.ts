@@ -10,7 +10,8 @@ const ExtractedHazardSchema = z.object({
     "chemical", "general_overflow", "unknown"
   ]),
   severity_level: z.number().int().min(1).max(10),
-  raw_location: z.string()
+  raw_location: z.string(),
+  translated_english: z.string().optional()
 });
 
 export type ExtractedHazard = z.infer<typeof ExtractedHazardSchema> & { degraded?: boolean; errorReason?: string };
@@ -32,7 +33,9 @@ Extract the hazard into a strict JSON object with EXACTLY these keys:
    - 3-5: Moderate hazard (construction debris, medium trash pile).
    - 1-2: Low hazard / minor littering.
 
-3. "raw_location": The spoken landmark, street name, metro pillar, or area name (e.g. "Karol Bagh metro pillar 44", "कनॉट प्लेस", "Connaught Place", "Lajpat Nagar"). If no location is mentioned, return "". Do NOT invent coordinates or GPS.
+3. "raw_location": The spoken landmark, street name, metro pillar, or area name in English/Roman characters (e.g. "Karol Bagh", "Connaught Place", "Lajpat Nagar", or romanized landmark name). If no location is mentioned, return "". Do NOT invent coordinates or GPS.
+
+4. "translated_english": A fluent, concise English translation of the spoken transcript. If the transcript was already in English, return it unchanged.
 
 Output ONLY the raw JSON object. Do NOT wrap in markdown formatting or explanation.`;
 

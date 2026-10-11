@@ -70,12 +70,14 @@ export async function POST(request: Request) {
       raw_location: extraction.raw_location,
       coordinates: coords ? { lat: coords.lat, lng: coords.lng } : null,
       action_required,
-      ward: tagWard(coords ? { lat: coords.lat, lng: coords.lng } : null)
+      ward: tagWard(coords ? { lat: coords.lat, lng: coords.lng } : null),
+      translated_english: extraction.translated_english || null
     };
 
     return NextResponse.json({
       report,
       transcript: text,
+      transcript_english: extraction.translated_english || null,
       transcript_mock: isMock,
       degraded: extraction.degraded || false,
       degraded_reason: extraction.errorReason || null

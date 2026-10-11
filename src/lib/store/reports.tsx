@@ -15,6 +15,7 @@ export interface Report {
   ward?: WardTag;
   createdAt?: string;
   transcript?: string;
+  translated_english?: string | null;
 }
 
 interface ReportsContextType {

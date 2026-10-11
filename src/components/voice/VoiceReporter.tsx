@@ -13,6 +13,7 @@ interface ReportResult {
     action_required: string;
   };
   transcript: string;
+  transcript_english?: string | null;
   transcript_mock: boolean;
   degraded: boolean;
   degraded_reason?: string | null;
@@ -289,8 +290,13 @@ export function VoiceReporter() {
           <p className="text-sm"><strong>Severity:</strong> {result.report.severity_level}/10</p>
           <p className="text-sm"><strong>Location:</strong> {result.report.raw_location || <span className="text-slate-400 italic">Location not resolved</span>}</p>
           <p className="text-sm"><strong>Action:</strong> {result.report.action_required}</p>
-          <div className="mt-2 text-xs text-gray-600">Transcript: {result.transcript}</div>
-          <button onClick={() => { setState("idle"); setTextInput(""); setResult(null); }} className="mt-4 w-full py-2 bg-gray-200 text-gray-800 rounded-md">New Report</button>
+          <div className="mt-2 text-xs text-gray-700 bg-white/70 p-2 rounded border border-green-200">
+            <div><strong className="text-gray-500">Original ({result.report.raw_location ? "Spoken" : "Audio"}):</strong> {result.transcript}</div>
+            {result.transcript_english && result.transcript_english !== result.transcript && (
+              <div className="mt-1 text-slate-800"><strong className="text-blue-600">English:</strong> {result.transcript_english}</div>
+            )}
+          </div>
+          <button onClick={() => { setState("idle"); setTextInput(""); setResult(null); }} className="mt-4 w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-md transition-colors">New Report</button>
         </div>
       )}
     </div>
