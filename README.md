@@ -1,150 +1,178 @@
 # SafaiKavach: AI Municipal Dispatch & Audit Engine
 
-**Tagline:** AI-powered voice dispatch and predictive hazard routing for municipal sanitation workers.
+**Tagline:** Voice-first hazard intake, deterministic ward dispatch, and route bypass engine for municipal sanitation fleets.
 
-SafaiKavach is a comprehensive municipal dispatch engine built to protect sanitation workers from encountering hazardous materials without warning. By enabling voice-based incident reporting via an intuitive field interface, the platform translates unstructured worker voice notes into structured geographic and logistical data. 
+SafaiKavach was built for the **AI First Product Builder Hackathon 2026** (Tracks: *Street Action* & *Waste Collection*). It gives sanitation workers and supervisors a fast, voice-driven interface to report road hazards (biohazards, live electrical wires, toxic chemicals, construction debris) in Hindi or English, extracts structured metadata without hallucinated coordinates, tags the incident to Delhi municipal wards, and generates truck bypass routes.
 
-**Live Demo URL:** [https://safaikavach-demo.vercel.app](https://safaikavach-demo.vercel.app) (Placeholder)
+**Live Deployment:** [https://garbage-unstop-project.vercel.app/](https://garbage-unstop-project.vercel.app/)
 
-## The Problem
-Sanitation workers frequently encounter hazardous waste (medical waste, dangerous chemicals, or heavy industrial debris) on standard routes without prior warning. Current systems lack a structured mechanism for field workers to instantly report anomalies, leaving them vulnerable to health risks and causing collection delays. Furthermore, fleet managers operate blindly without historical spatial data to identify recurring hazardous hotspots, leading to inefficient routing and escalating mitigation costs.
+---
 
-## Features
-- **Voice Intake in Hindi & English:** A responsive, single-button voice interface designed for quick, on-the-go reporting in noisy environments.
-- **AI Extraction & Zod Validation:** Converts unstructured voice transcripts into rigorously typed geographic hazards using OpenAI-compatible LLMs.
-- **Ward Tagging & Resolution:** Employs hierarchical spatial resolution (GPS > Gazetteer Landmark Lookup) integrated with Turf.js against Delhi MCD ward boundaries.
-- **Live Map Dashboard:** Interactive geographic interface displaying real-time incidents categorized by severity, with hotspot shading indicating weekly trends.
-- **Hazard Bypass & Hazmat Routing:** Calculates adaptive OSRM routes, standardizing a bypass route for regular fleet and a direct route for specialized cleanup crews.
-- **Estimated Financial Impact:** Logs a real-time ledger of simulated municipal savings derived from prevented exposure, injuries, and routing overhead.
-- **Weekly Root-Cause Audit:** Triggers an automated LLM-driven root-cause investigation across incident clusters.
-- **Early Warning Hotspots:** Utilizes anomalous incident spike detection across municipal wards.
+## What the System Actually Does
 
-## Architecture
-*(See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full diagrams and design decisions)*
+1. **Voice & Text Hazard Reporting**
+   - **Speech-to-Text:** Workers record audio directly in the browser. Audio is resampled to 16 kHz mono WAV and transcribed via Gnani STT (Vachana API in `hi-IN`). If Gnani is offline or credentials are unset, it falls back gracefully to a mock transcript.
+   - **Text Input & Quick Prompts:** Works on mobile and desktop without microphone access using sample hazard buttons or manual input.
+   - **Audio Robustness:** Audio recorder supports one-tap start/stop, enforces a 600 ms minimum audio threshold to prevent corrupt empty buffers, and handles browser pointer events safely.
+
+2. **LLM Extraction & English Translation**
+   - Raw transcripts (Hindi, Hinglish, or English) are parsed with an LLM (defaults to OpenRouter's free router `openrouter/free`, OpenAI-compatible).
+   - Extracts a strict JSON schema validated via **Zod**:
+     - `hazard_category`: Enforces one of 6 exact types (`biohazard_medical`, `construction_debris`, `electrical_hazard`, `chemical`, `general_overflow`, `unknown`).
+     - `severity_level`: Integer 1 to 10 based on immediate physical risk.
+     - `raw_location`: Spoken place or landmark name.
+     - `translated_english`: Automatic English translation for Hindi transcripts.
+   - **Fallback & Resilience:** Strips `<think>` blocks, enforces single-retry repair on invalid JSON, and degrades cleanly to `{ hazard_category: "unknown", severity_level: 5 }` with an on-screen diagnostic badge if the upstream provider fails.
+
+3. **Deterministic Spatial Resolution & Ward Tagging**
+   - **No Hallucinated Coordinates:** The LLM is strictly prohibited from guessing lat/long.
+   - **Coordinate Hierarchy:**
+     1. Device GPS (if browser geolocation is permitted).
+     2. Gazetteer lookup against 15 Delhi landmarks (e.g., Connaught Place, Karol Bagh, Lajpat Nagar, with both English and Devanagari aliases like `करोल बाग`, `कनॉट प्लेस`).
+     3. Unresolved: Saved with a clear *"Location not resolved"* badge; never dropped or faked.
+   - **Ward Tagging:** Points are checked via point-in-polygon (`@turf/turf`) against actual Delhi MCD ward boundaries (`data/delhi_wards.json`).
+
+4. **Deterministic Dispatch Rules & Routing**
+   - Routing and dispatch decisions are **100% rule-based code** (never left to non-deterministic LLM hallucinations):
+     - `dispatch_hazmat_bypass_standard`: Category is `biohazard_medical`, `chemical`, or `electrical_hazard` with Severity $\ge 6$. Standard truck is rerouted, specialized response is dispatched.
+     - `bypass_standard`: Severity $\ge 7$ for other hazards. Standard collection truck bypasses the segment.
+     - `routine_collection`: All lower severity reports.
+   - **Route Engine:** Calculates planned, bypass, and hazmat routes using the public OSRM (Open Source Routing Machine) API with geodesic fallbacks if OSRM is unreachable.
+
+5. **Live Interactive Map & Early Warning Panel**
+   - **Live Map:** Interactive Leaflet map displaying active hazards, severity pins, ward polygons, and vehicle detour trajectories.
+   - **Early Warning:** Calculates 4-week window trends across wards (W-3, W-2, W-1, W0) to surface hotspot spikes and projection counts before conditions worsen.
+   - **Financial Ledger:** Calculates an estimated municipal damage prevention figure based on transparent baseline formulas (prevented medical/equipment damages minus detour transit costs).
+
+6. **Weekly Audit Engine**
+   - Groups multi-week reports into `(ward, category)` clusters.
+   - Identifies the highest absolute anomaly increase week-over-week.
+   - Uses an LLM to generate a structured root-cause diagnostic and concrete municipal action plan.
+
+---
+
+## What This Project Is NOT (Honest Scope & Limitations)
+
+To keep this hackathon project transparent and grounded:
+- **Synthetic Demonstration Data:** The demo comes preloaded with 60 synthetic reports across Delhi (`data/seed_raw.json` / `src/data/seed_reports.ts`) calibrated to demonstrate multi-week trend detection. Real submissions are saved directly to browser `localStorage`.
+- **Database:** Prisma schema definitions are present for architectural demonstration (`prisma/schema.prisma`), but there is no live PostgreSQL database running in production to adhere to a serverless web scope.
+- **Financial Numbers:** Prevented financial impact figures (`src/lib/finance/assumptions.ts`) are **illustrative assumptions**, not audited municipal ledgers.
+- **Prediction Model:** The "Early Warning" system uses straightforward 4-week moving averages and weekly difference heuristics; it is **not** a complex neural network or trained predictive ML model.
+- **OSRM Demo Server:** Road routing relies on the public open-source OSRM demo server and illustrative depot anchors (Karol Bagh depot, Okhla transfer station).
+
+---
+
+## Architecture Flow
 
 ```mermaid
 flowchart TD
-    Voice[Worker Voice Note] --> STT[Gnani Prisma STT]
-    STT --> Transcript[Raw Transcript]
-    Transcript --> LLM[LLM Extraction Agent]
+    Voice[Worker Voice / Text Input] --> STT[Gnani STT / Vachana hi-IN]
+    STT --> Transcript[Raw Hindi/English Transcript]
+    Transcript --> LLM[LLM Extraction Agent - OpenRouter]
     
-    LLM --> CoordMatch{Coordinate Resolution}
-    CoordMatch -->|GPS provided| GeoGPS[Exact Coordinates]
-    CoordMatch -->|Named landmark| Gazetteer[Gazetteer Lookup]
-    CoordMatch -->|Unknown| NullLocation[Flagged for Review]
+    LLM --> Schema[Zod Validated Extraction + English Translation]
+    Schema --> LocMatch{Spatial Resolution}
     
-    GeoGPS --> WardTag[Turf.js Ward Tagging]
-    Gazetteer --> WardTag
+    LocMatch -->|GPS allowed| Coords[Exact GPS]
+    LocMatch -->|Named landmark| Gazetteer[Gazetteer Match hi/en]
+    LocMatch -->|No match| Unresolved[Flagged: Location not resolved]
     
-    WardTag --> Dispatch[Rule-Based Dispatch]
-    Dispatch --> Routing[OSRM Routing]
+    Coords --> Ward[Turf.js Ward Tagging]
+    Gazetteer --> Ward
     
-    Routing --> Dashboard[Live Leaflet Map]
-    Routing --> Finance[Impact Estimate]
+    Ward --> DispatchRules[Deterministic Rule Engine]
+    DispatchRules --> RouteAPI[OSRM Route Engine]
     
-    Dashboard --> EarlyWarning[Early Warning Hotspots]
-    Dashboard --> Audit[Weekly Root-Cause Audit]
+    RouteAPI --> LeafletMap[Live Leaflet Map & Detours]
+    RouteAPI --> ImpactLedger[Prevented Impact Ledger]
+    
+    LeafletMap --> HotspotPanel[Early Warning Hotspots]
+    LeafletMap --> WeeklyAudit[LLM Weekly Root-Cause Audit]
 ```
 
-### Technology Stack
-| Layer | Technologies Used |
-|-------|-------------------|
-| **Frontend Framework** | Next.js 16.4 (App Router), React, TypeScript |
-| **Styling** | Tailwind CSS, Lucide React (Icons) |
-| **Mapping & Geospatial** | Leaflet, React-Leaflet, Turf.js |
-| **Voice Processing** | MediaRecorder API, Gnani Prisma STT |
-| **AI / LLM Orchestration** | OpenRouter (OpenAI-compatible endpoints), Zod |
-| **Routing Provider** | Open Source Routing Machine (OSRM) Demo API |
+---
 
-## Design Principles
-- **No LLM Hallucinations:** The AI never invents or guesses coordinates. All spatial data is derived from actual GPS or deterministic gazetteer mapping.
-- **Deterministic Dispatch:** Dispatch actions and routing logic are entirely rule-based and not left to LLM decision-making.
-- **Strict Validation:** All external input, from STT transcripts to LLM extractions, is meticulously verified via Zod schemas.
-- **Resilience:** Every external API call (STT, LLM, Routing) utilizes timeouts, multi-attempt retries, and graceful fallbacks.
-- **Mock Mode First:** The demo is engineered to function flawlessly in fully offline/mock modes without requiring active API keys.
+## Tech Stack
 
-## Getting Started
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Framework** | Next.js 16 (App Router), React 19, TypeScript | Serverless web app & API routes |
+| **Styling** | Tailwind CSS | Clean dark-mode operational dashboard |
+| **Mapping** | Leaflet, React-Leaflet, Turf.js | Ward boundaries, hazard markers, detour lines |
+| **Speech-to-Text** | Gnani Vachana STT API (`hi-IN`) | Indian-language voice transcription |
+| **LLM Provider** | OpenRouter (`openrouter/free`) | Structured JSON hazard extraction & translation |
+| **Validation** | Zod | Runtime schema validation on every boundary |
+| **Routing** | OSRM (Open Source Routing Machine) | Turn-by-turn road routes and bypasses |
+| **Testing** | Vitest | 36 unit tests covering routing, LLM, wards, and audit |
 
-### Prerequisites
-- Node.js (v18+)
-- npm or pnpm
+---
 
-### Installation
+## Getting Started Locally
+
+### 1. Clone & Install
 ```bash
 git clone https://github.com/kaizen105/Garbage_unstop_project.git
 cd Garbage_unstop_project
 npm install
 ```
 
-### Environment Variables
-Copy `.env.example` to `.env` or `.env.local` and populate the required keys.
+### 2. Configure Environment
+Create a `.env` file in the root directory:
+```env
+# Optional: Gnani Vachana STT (if empty, uses fallback mock)
+GNANI_API_KEY=
+GNANI_STT_URL=https://api.vachana.ai/stt/v3
 
-| Variable | Description | Required | Default / Mock Behavior |
-|----------|-------------|----------|-------------------------|
-| `LLM_PROVIDER` | Defines the LLM strategy (`mock`, `openrouter`, `evon`). | No | `mock` |
-| `LLM_BASE_URL` | Base endpoint for the chosen LLM provider. | No | - |
-| `LLM_API_KEY` | Bearer token for LLM authentication. | No | - |
-| `LLM_MODEL_EXTRACT` | Model used for hazard JSON extraction. | No | - |
-| `LLM_MODEL_AUDIT` | Model used for root-cause analysis audits. | No | - |
-| `GNANI_API_KEY` | API Key for the Gnani STT service. | No | Mock returns static transcript |
-| `GNANI_STT_URL` | Endpoint for the Gnani Prisma STT API. | No | - |
+# LLM Provider (defaults to OpenRouter free models)
+LLM_PROVIDER=openrouter
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=your_openrouter_api_key_here
+LLM_MODEL_EXTRACT=openrouter/free
+LLM_MODEL_AUDIT=openrouter/free
 
-*(Note: Setting `LLM_PROVIDER=mock` and omitting the Gnani API key will run the application entirely in synthetic offline mode).*
+# Map provider
+NEXT_PUBLIC_MAP_PROVIDER=leaflet
+```
 
-### Running the App
+*(Note: If `LLM_API_KEY` is omitted, setting `LLM_PROVIDER=mock` allows 100% offline local development without external API calls).*
+
+### 3. Run Dev Server
 ```bash
-# Start the development server
 npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-# Run full TypeScript validation
-npm run typecheck
+---
 
-# Run unit tests
+## Verification & Testing
+
+Every commit and deployment is verified with comprehensive automated tests and type checking:
+
+```bash
+# Run 36 Vitest unit tests
 npm test
 
-# Build for production
+# Run TypeScript compilation check
+npm run typecheck
+
+# Run ESLint validation
+npm run lint
+
+# Build production bundle
 npm run build
 ```
 
-## API Reference
+**Test Coverage Highlights:**
+- **36 / 36 unit tests passing**
+- STT audio payload validation, size limits, and 503 retry mechanics
+- Turf.js spatial ward point-in-polygon matching and outside-boundary fallbacks
+- OSRM route parsing, detour cost formulas, and geodesic fallbacks
+- Anomaly cluster rankings with tie-break stability
+- Zod schema validations across all API inputs
 
-| Endpoint | Method | Input (Body/Query) | Output / Action |
-|----------|--------|--------------------|-----------------|
-| `/api/transcribe` | POST | FormData (audio file, config) | `{ success, transcript, request_id }` |
-| `/api/report` | POST | `{ transcript, coords? }` | Validated `HazardReport` |
-| `/api/route` | POST | `{ coordinates: [lon, lat][] }` | `{ planned, bypass, hazmat }` |
-| `/api/audit` | POST | `{ cluster: HazardReport[] }` | `{ root_cause, mitigation }` |
-| `/api/wards` | GET | None | Delhi MCD GeoJSON FeatureCollection |
+---
 
-## Limits & Honest Declaration
-- **Data & Storage:** All incident reports are synthetic (`src/data/seed_reports.ts`). Submitted reports are only saved to your browser's `localStorage`. The Prisma schema is included but not wired to a live database.
-- **Financials:** Cost figures (in INR) representing prevented damages are illustrative assumptions (`src/lib/finance/assumptions.ts`) and do not reflect real-world municipal budgets.
-- **Geography & Routing:** The spatial map utilizes DataMeet's historical open-source Delhi MCD ward boundaries. We use arbitrary coordinates for demo depots, and we rely on the public OSRM demo server for route approximations.
-- **Predictive Anomalies:** The "Early Warning" system employs a naive statistical anomaly detection model (standard deviations over a 4-week window) plus basic trend extrapolation. It is **not** a trained machine learning forecast model.
-- **LLM Infrastructure:** The LLM adapter leverages an OpenAI-compatible interface via OpenRouter. While an Evon-ready adapter (`evon`) was built, it is not wired live.
-
-## Project Structure
-```
-Garbage_unstop_project/
-├── data/              # Static GeoJSON boundaries and synthetic seeds
-├── docs/              # Architectural diagrams and decision records
-├── scripts/           # Pre-build data preparation and test scripts
-├── src/
-│   ├── app/           # Next.js App Router endpoints and pages
-│   ├── components/    # Reusable React UI (Map, Voice, Dashboards)
-│   ├── lib/           # Core logic (LLM, Spatial, GNANI, Finance)
-│   └── data/          # Seed definitions and landmarks
-└── .env.example       # Environment template
-```
-
-### Testing
-We maintain rigorous unit testing across core extraction, spatial parsing, and routing logic:
-- `30 passed` unit tests (`npm test`) using Vitest.
-
-### Roadmap
-- **Live Database:** Integrate Prisma ORM (`prisma/schema.prisma`) with a persistent PostgreSQL layer.
-- **Live Fleet Data:** Ingest active GPS telemetry from municipal vehicles.
-- **Omnichannel Intake:** Expand reporting beyond the web UI to WhatsApp bots and IVR hotlines.
-- **Scheduled Automation:** Deploy CRON jobs for automated weekly audits.
-- **Evon Mainnet:** Wire the application endpoints to the live Evon hosting environment.
-- **Multilingual Support:** Broaden STT language parsing beyond Hindi and English.
+## Authors & Hackathon Submission
+Built for the **AI First Product Builder Hackathon 2026**.
+- **Live URL:** [https://garbage-unstop-project.vercel.app/](https://garbage-unstop-project.vercel.app/)
+- **Repository:** [https://github.com/kaizen105/Garbage_unstop_project](https://github.com/kaizen105/Garbage_unstop_project)
