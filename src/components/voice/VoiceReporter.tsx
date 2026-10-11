@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { humanizeCategory } from "@/lib/utils/format";
 import { useReports } from "@/lib/store/reports";
 
@@ -109,14 +109,46 @@ export function VoiceReporter() {
     }
   };
 
-  const startRecording = async () => {
+  const processAudio = useCallback(async (rawBlob: Blob) => {
+    setState("processing");
+    try {
+      const wavBlob = await resampleTo16kWav(rawBlob);
+      const geo = await getGeo();
+      
+      const formData = new FormData();
+      formData.append("audio", wavBlob, "recording.wav");
+      if (geo) {
+        formData.append("lat", geo.lat.toString());
+        formData.append("lng", geo.lng.toString());
+      }
+      
+      const res = await fetch("/api/report", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Server error");
+      setResult(data);
+      if (data.report) addReport(data.report);
+      setState("success");
+    } catch (err: unknown) {
+      setState("error");
+      setErrorMsg((err as Error).message || "Failed to process audio");
+    }
+  }, [addReport]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
+      mediaRecorder.current.stop();
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    }
+  }, []);
+
+  const startRecording = useCallback(async () => {
     if (state === "recording" || state === "processing") return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       mediaRecorder.current = new MediaRecorder(stream);
       audioChunks.current = [];
-      recordingStartTime.current = Date.now();
+      recordingStartTime.current = performance.now();
       
       mediaRecorder.current.ondataavailable = e => {
         if (e.data.size > 0) audioChunks.current.push(e.data);
@@ -124,7 +156,7 @@ export function VoiceReporter() {
       
       mediaRecorder.current.onstop = async () => {
         if (timer.current) clearInterval(timer.current);
-        const durationMs = Date.now() - recordingStartTime.current;
+        const durationMs = performance.now() - recordingStartTime.current;
         if (durationMs < 600) {
           setState("idle");
           setErrorMsg("Hold or tap longer to speak (too short).");
@@ -151,39 +183,7 @@ export function VoiceReporter() {
       setState("error");
       setErrorMsg("Microphone access denied or unsupported.");
     }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
-      mediaRecorder.current.stop();
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    }
-  };
-
-  const processAudio = async (rawBlob: Blob) => {
-    setState("processing");
-    try {
-      const wavBlob = await resampleTo16kWav(rawBlob);
-      const geo = await getGeo();
-      
-      const formData = new FormData();
-      formData.append("audio", wavBlob, "recording.wav");
-      if (geo) {
-        formData.append("lat", geo.lat.toString());
-        formData.append("lng", geo.lng.toString());
-      }
-      
-      const res = await fetch("/api/report", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Server error");
-      setResult(data);
-      if (data.report) addReport(data.report);
-      setState("success");
-    } catch (err: unknown) {
-      setState("error");
-      setErrorMsg((err as Error).message || "Failed to process audio");
-    }
-  };
+  }, [state, stopRecording, processAudio]);
 
   const submitText = async () => {
     if (!textInput.trim()) return;
