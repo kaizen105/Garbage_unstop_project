@@ -214,17 +214,18 @@ export function VoiceReporter() {
     <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
       {state === "idle" && (
         <>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             <button 
-              onPointerDown={startRecording}
-              className="flex-1 py-4 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-medium rounded-lg select-none text-center shadow transition-all"
-              style={{ touchAction: "none" }}
+              type="button"
+              onClick={startRecording}
+              className="w-full py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold rounded-xl text-center shadow-md transition-all flex items-center justify-center gap-2"
             >
-              🎙️ Hold or Click to Record
+              <span className="w-3 h-3 rounded-full bg-white animate-ping" />
+              <span>Click to Start Recording</span>
             </button>
+            <div className="text-center text-xs text-gray-500">Tap once to start, speak clearly, then tap stop</div>
           </div>
-          <div className="text-center text-xs text-gray-400">Press and hold, or tap once to start speaking</div>
-          <div className="text-center text-gray-500 my-1">or type below</div>
+          <div className="text-center text-gray-400 text-xs my-1">— OR TYPE BELOW —</div>
           <textarea 
             value={textInput} 
             onChange={e => setTextInput(e.target.value)}
@@ -242,14 +243,19 @@ export function VoiceReporter() {
       )}
 
       {state === "recording" && (
-        <button 
-          onClick={stopRecording}
-          onPointerUp={stopRecording}
-          className="w-full py-4 bg-red-700 text-white font-bold rounded-lg select-none animate-pulse shadow-lg"
-          style={{ touchAction: "none" }}
-        >
-          ⏹️ Recording... Click or Release to Stop ({time}s)
-        </button>
+        <div className="flex flex-col gap-2">
+          <button 
+            type="button"
+            onClick={stopRecording}
+            className="w-full py-5 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-lg animate-pulse flex items-center justify-center gap-2"
+          >
+            <span className="w-4 h-4 bg-white rounded-sm" />
+            <span>Click to Stop & Submit ({time}s)</span>
+          </button>
+          <div className="text-center text-xs text-red-600 font-medium animate-pulse">
+            Listening... Speak now, then click the button to finish.
+          </div>
+        </div>
       )}
 
       {state === "processing" && (
