@@ -49,56 +49,73 @@ export function VoiceReporter() {
     });
   };
 
+  const recordingStartTime = useRef<number>(0);
+
   const resampleTo16kWav = async (blob: Blob): Promise<Blob> => {
-    const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    
-    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
-    const source = offlineCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineCtx.destination);
-    source.start(0);
-    const rendered = await offlineCtx.startRendering();
-    
-    const length = rendered.length;
-    const wavBuffer = new ArrayBuffer(44 + length * 2);
-    const view = new DataView(wavBuffer);
-    
-    const writeString = (offset: number, str: string) => {
-      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-    };
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + length * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); 
-    view.setUint16(22, 1, true); 
-    view.setUint32(24, 16000, true);
-    view.setUint32(28, 16000 * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(36, 'data');
-    view.setUint32(40, length * 2, true);
-    
-    const channelData = rendered.getChannelData(0);
-    let offset = 44;
-    for (let i = 0; i < length; i++) {
-      const s = Math.max(-1, Math.min(1, channelData[i] || 0));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-      offset += 2;
+    if (!blob || blob.size < 100) {
+      throw new Error("Recording too short or empty audio.");
     }
-    
-    return new Blob([wavBuffer], { type: 'audio/wav' });
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const audioCtx = new AudioContextClass();
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error("Recording too short or empty audio.");
+      }
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      
+      const offlineCtx = new OfflineAudioContext(1, Math.max(1, Math.floor(audioBuffer.duration * 16000)), 16000);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+      const rendered = await offlineCtx.startRendering();
+      
+      const length = rendered.length;
+      const wavBuffer = new ArrayBuffer(44 + length * 2);
+      const view = new DataView(wavBuffer);
+      
+      const writeString = (offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      };
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); 
+      view.setUint16(22, 1, true); 
+      view.setUint32(24, 16000, true);
+      view.setUint32(28, 16000 * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, length * 2, true);
+      
+      const channelData = rendered.getChannelData(0);
+      let offset = 44;
+      for (let i = 0; i < length; i++) {
+        const s = Math.max(-1, Math.min(1, channelData[i] || 0));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+      }
+      
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    } finally {
+      if (audioCtx.state !== "closed") {
+        audioCtx.close().catch(() => {});
+      }
+    }
   };
 
   const startRecording = async () => {
+    if (state === "recording" || state === "processing") return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       mediaRecorder.current = new MediaRecorder(stream);
       audioChunks.current = [];
+      recordingStartTime.current = Date.now();
       
       mediaRecorder.current.ondataavailable = e => {
         if (e.data.size > 0) audioChunks.current.push(e.data);
@@ -106,11 +123,17 @@ export function VoiceReporter() {
       
       mediaRecorder.current.onstop = async () => {
         if (timer.current) clearInterval(timer.current);
+        const durationMs = Date.now() - recordingStartTime.current;
+        if (durationMs < 600) {
+          setState("idle");
+          setErrorMsg("Hold or tap longer to speak (too short).");
+          return;
+        }
         const blob = new Blob(audioChunks.current, { type: 'audio/webm' });
         processAudio(blob);
       };
 
-      mediaRecorder.current.start(200);
+      mediaRecorder.current.start(100);
       setState("recording");
       setTime(30);
       
@@ -191,14 +214,17 @@ export function VoiceReporter() {
     <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
       {state === "idle" && (
         <>
-          <button 
-            onPointerDown={startRecording}
-            className="w-full py-4 bg-red-500 text-white rounded-lg active:bg-red-600 select-none"
-            style={{ touchAction: "none" }}
-          >
-            Hold to Record
-          </button>
-          <div className="text-center text-gray-500">or type below</div>
+          <div className="flex gap-2">
+            <button 
+              onPointerDown={startRecording}
+              className="flex-1 py-4 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-medium rounded-lg select-none text-center shadow transition-all"
+              style={{ touchAction: "none" }}
+            >
+              🎙️ Hold or Click to Record
+            </button>
+          </div>
+          <div className="text-center text-xs text-gray-400">Press and hold, or tap once to start speaking</div>
+          <div className="text-center text-gray-500 my-1">or type below</div>
           <textarea 
             value={textInput} 
             onChange={e => setTextInput(e.target.value)}
@@ -217,12 +243,12 @@ export function VoiceReporter() {
 
       {state === "recording" && (
         <button 
+          onClick={stopRecording}
           onPointerUp={stopRecording}
-          onPointerLeave={stopRecording}
-          className="w-full py-4 bg-red-700 text-white rounded-lg select-none animate-pulse"
+          className="w-full py-4 bg-red-700 text-white font-bold rounded-lg select-none animate-pulse shadow-lg"
           style={{ touchAction: "none" }}
         >
-          Recording... Release to stop ({time}s)
+          ⏹️ Recording... Click or Release to Stop ({time}s)
         </button>
       )}
 
