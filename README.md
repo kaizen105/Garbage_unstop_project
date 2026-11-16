@@ -1,193 +1,144 @@
-# SafaiKavach: AI Municipal Dispatch & Audit Engine
+# SafaiKavach
 
-**Tagline:** Voice-first hazard intake, deterministic ward dispatch, and route bypass engine for municipal sanitation fleets.
+Voice-first municipal hazard intake, PostGIS ward dispatch, and grounded weekly mitigation planning for Delhi sanitation fleets.
 
-SafaiKavach was built for the **AI First Product Builder Hackathon 2026** (Tracks: *Street Action* & *Waste Collection*). It gives sanitation workers and supervisors a fast, voice-driven interface to report road hazards (biohazards, live electrical wires, toxic chemicals, construction debris) in Hindi or English, extracts structured metadata without hallucinated coordinates, tags the incident to Delhi municipal wards, and generates truck bypass routes.
+SafaiKavach gives municipal staff and citizens a way to report road hazards (biomedical waste, loose electrical wiring, chemical leaks, demolition debris, and open garbage heaps) by voice or text. Reports are validated on the server, tagged to Delhi municipal wards through spatial PostGIS queries, routed to field teams using deterministic rules, and aggregated weekly into structured mitigation plans grounded against verified SQL totals.
 
-**Live Deployment:** [https://garbage-unstop-project.vercel.app/](https://garbage-unstop-project.vercel.app/)
+## Architecture
 
----
-
-## Live Demo Mode & Operational Overview
-
-- **Speech-to-Text:** Live recording transcribes using the real Gnani STT (Vachana API in `hi-IN`). If credentials are empty or the upstream service is unreachable, it falls back gracefully to a mock transcript.
-- **LLM Extraction & Auditing:** The architecture includes pluggable LLM support via OpenRouter (`openrouter/free` or custom OpenAI-compatible models). By default, if no external LLM key is configured, the live web deployment runs in **mock/keyword-based extraction mode**, reliably deriving categories, severity, and audit reports without failing.
-- **Evon Adapter:** The architecture is designed for Evon deployment; the `evon` provider config is wired into the environment schema but is currently not live.
-
----
-
-## What the System Does
-
-1. **Voice & Text Hazard Reporting**
-   - **Audio Intake:** Workers record directly in the browser. Audio is resampled to 16 kHz mono WAV and sent to Gnani STT.
-   - **Buffer Protection:** Enforces a 600 ms minimum audio duration threshold to prevent 0-byte corrupt recordings from hitting `decodeAudioData`.
-   - **Text Fallback:** Provides one-click sample hazard buttons and manual text input when microphone access is unavailable.
-
-2. **Hazard Extraction & Translation**
-   - Raw transcripts (Hindi, Hinglish, or English) are parsed into a strict Zod-validated schema:
-     - `hazard_category`: Strictly mapped to 6 categories (`biohazard_medical`, `construction_debris`, `electrical_hazard`, `chemical`, `general_overflow`, `unknown`).
-     - `severity_level`: Integer 1 to 10 based on immediate physical risk.
-     - `raw_location`: Spoken place or landmark name.
-     - `translated_english`: Provides English translations for Hindi transcripts.
-   - **Resilience:** Strips `<think>` blocks, performs single-retry repair on invalid JSON, and degrades cleanly to `{ hazard_category: "unknown", severity_level: 5 }` with an on-screen diagnostic badge if an upstream API error occurs.
-
-3. **Deterministic Spatial Resolution & Ward Tagging**
-   - **No Hallucinated Coordinates:** The LLM is strictly prohibited from inventing lat/long.
-   - **Resolution Hierarchy:**
-     1. Device GPS (if browser geolocation is permitted).
-     2. Gazetteer lookup against 15 Delhi landmarks (e.g., Connaught Place, Karol Bagh, Lajpat Nagar, with both English and Devanagari aliases like `करोल बाग`, `कनॉट प्लेस`).
-     3. Unresolved: Saved with a clear *"Location not resolved"* badge; never dropped or faked.
-   - **Ward Boundaries:** Tagged using Turf.js (`@turf/turf`) point-in-polygon matching against DataMeet ward GeoJSON (`data/delhi_wards.json`, which may predate the 2022 delimitation).
-
-4. **Deterministic Dispatch Rules & Routing**
-   - Routing and dispatch decisions are **100% rule-based code**:
-     - `dispatch_hazmat_bypass_standard`: Category is `biohazard_medical`, `chemical`, or `electrical_hazard` with Severity $\ge 6$. Standard truck is rerouted, specialized cleanup response is dispatched.
-     - `bypass_standard`: Severity $\ge 7$ for non-hazmat hazards. Standard collection truck bypasses the hazard area.
-     - `routine_collection`: All lower severity reports.
-   - **Route Engine:** Calculates planned, bypass, and hazmat routes using the public OSRM (Open Source Routing Machine) API with geodesic fallbacks if OSRM is unreachable.
-
-5. **Live Interactive Map & Early Warning Panel**
-   - **Live Map:** Interactive Leaflet map displaying active hazards, severity markers, ward polygons, and vehicle detour trajectories.
-   - **Early Warning:** Computes weekly buckets over a 4-week window (W-3, W-2, W-1, W0). Uses an **anomaly score** (`(this_week - mean) / max(1, std)`) and a **linear least-squares projection** to highlight ward risk levels (`high`, `medium`, `low`).
-   - **Financial Ledger:** Calculates an estimated municipal damage prevention figure based on transparent baseline formulas (prevented medical/equipment damages minus detour transit costs).
-
-6. **Weekly Audit Engine**
-   - Groups multi-week reports into `(ward, category)` clusters.
-   - Ranks groups by highest absolute increase (`this_week - prev_week`) with a $\ge 3$ incident threshold.
-   - Produces a root-cause breakdown and departmental mitigation action plan.
-
----
-
-## Honest Scope & Limitations
-
-To keep this hackathon project transparent and grounded:
-- **Synthetic Demonstration Data:** The demo comes preloaded with 60 synthetic reports across Delhi (`data/seed_raw.json` / `src/data/seed_reports.ts`) calibrated to demonstrate multi-week trend detection. Real submissions are saved directly to browser `localStorage`.
-- **Database:** Prisma schema definitions are present for architectural demonstration (`prisma/schema.prisma`), but there is no live PostgreSQL database running in production.
-- **Ward Boundaries:** The spatial map uses DataMeet's open-source Delhi ward GeoJSON, which may predate the 2022 municipal ward delimitation.
-- **Financial Numbers:** Prevented financial impact figures (`src/lib/finance/assumptions.ts`) are **illustrative assumptions**, not audited municipal ledgers.
-- **OSRM Demo Server:** Road routing relies on the public open-source OSRM demo server and illustrative depot anchors (Karol Bagh depot, Okhla transfer station).
-
----
-
-## Architecture Flow
+### Data Flow
 
 ```mermaid
 flowchart TD
-    Voice[Worker Voice / Text Input] --> STT[Gnani STT / Vachana hi-IN]
-    STT --> Transcript[Raw Hindi/English Transcript]
-    Transcript --> LLM[Extraction Engine - Keyword / LLM]
-    
-    LLM --> Schema[Zod Validated Extraction + English Translation]
-    Schema --> LocMatch{Spatial Resolution}
-    
-    LocMatch -->|GPS allowed| Coords[Exact GPS]
-    LocMatch -->|Named landmark| Gazetteer[Gazetteer Match hi/en]
-    LocMatch -->|No match| Unresolved[Flagged: Location not resolved]
-    
-    Coords --> Ward[Turf.js Ward Tagging - DataMeet GeoJSON]
-    Gazetteer --> Ward
-    
-    Ward --> DispatchRules[Deterministic Rule Engine]
-    DispatchRules --> RouteAPI[OSRM Route Engine]
-    
-    RouteAPI --> LeafletMap[Live Leaflet Map & Detours]
-    RouteAPI --> ImpactLedger[Prevented Impact Ledger]
-    
-    LeafletMap --> HotspotPanel[Early Warning - Anomaly & Linear Projection]
-    LeafletMap --> WeeklyAudit[Root-Cause Audit Engine]
+    A["Citizen or Driver Input: Voice Audio or Text"] --> B{"Submission Path"}
+    B -->|"Audio Multipart"| C["/api/report Endpoint"]
+    B -->|"Text and Geolocation"| D["Server Action: submitReport"]
+    C --> E["Gnani Speech-to-Text"]
+    E --> F["LLM or Mock Hazard Extraction"]
+    D --> F
+    F --> G["Zod Server Schema Validation"]
+    G --> H["Spatial Landmark Gazetteer"]
+    H --> I["PostGIS tagWardDb: ST_Covers over 290 Wards"]
+    I --> J["Deterministic Rule Dispatch: getActionRequired"]
+    J --> K[("Neon Postgres: Report and Ward Tables")]
+    K --> L["Dashboard: React 19 UI and Live Leaflet Map"]
+    K --> M["Weekly Aggregates Query: SQL GROUP BY"]
+    M --> N["LangChain ChatOpenAI: Structured Output"]
+    N --> O["groundPlan: Anti-Hallucination Enrichment"]
+    O --> P[("MitigationPlan Table: Cached Strategy")]
 ```
 
----
+1. Report Intake: Spoken audio is transcribed via Gnani STT (or mock fallback). Audio goes through `/api/report`. Text reports submit through the `submitReport` Server Action.
+2. Server Extraction: The server parses the transcript or text using an LLM or keyword fallback into a hazard category, severity score (1 to 10), and location text.
+3. Coordinates and Spatial Tagging: Coordinates are resolved from browser GPS or Delhi landmark gazetteer matching. The server then executes a PostGIS `ST_Covers` query over 290 MultiPolygon ward boundaries indexed with GiST in Neon Postgres.
+4. Deterministic Dispatch: Hazard category and severity determine the action required (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`). The client cannot choose or override this value.
+5. Storage and Broadcast: Reports are stored in the `Report` table in Postgres using Prisma. The client updates local view state without page reloads.
+6. Mitigation Planning: `/api/mitigation-plan` runs a parameterized SQL query grouping the last 7 days of incidents by ward and hazard category. LangChain feeds these aggregates into an LLM with structured output. The server verifies every recommended ward and category against the SQL results via `groundPlan`, enriches items with exact database numbers, and caches the record in the `MitigationPlan` table.
+
+## Key Design Decisions
+
+* Counting stays in SQL: The LLM never calculates counts, sums, or percentage changes. Postgres performs all grouping, counting, and severity averages. The LLM only generates qualitative hypotheses, urgency ratings, and operational tasks.
+* Anti-hallucination grounding: The `groundPlan` function checks every priority returned by the LLM against the actual weekly SQL aggregates. If the model references an unknown wardKey or hazard category, or provides duplicate priorities, the plan is rejected with a `GroundingError`.
+* Zero raw text sent to mitigation LLM: Citizen voice transcripts, raw location notes, and PII are never passed to the mitigation model. The prompt receives only structured ward keys, ward names, categories, counts, and severity statistics.
+* Server-controlled dispatch rules: The browser client never supplies `hazard_category`, `severity_level`, or `action_required`. All categorization, severity scoring, and routing rules execute strictly on the server.
+* Stable ward externalId slug: The GeoJSON source file contains collisions where index 82 (GREATER KAILASH-I) and index 192 (Ward 192) share the same ward ID 192. Wards are uniquely identified by a composite slug format (`${ward_id}-${slug(name)}`) to prevent silent row overwrites during import.
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Framework** | Next.js 16 (App Router), React 19, TypeScript | Web app & serverless API endpoints |
-| **Styling** | Tailwind CSS | Operational municipal dashboard |
-| **Mapping** | Leaflet, React-Leaflet, Turf.js | DataMeet ward boundaries, hazard markers, detour lines |
-| **Speech-to-Text** | Gnani Vachana STT API (`hi-IN`) | Indian-language voice transcription |
-| **Extraction / Audit** | Pluggable (Keyword fallback / OpenRouter) | Structured JSON hazard extraction & translation |
-| **Validation** | Zod | Runtime schema validation |
-| **Routing** | OSRM (Open Source Routing Machine) | Turn-by-turn road routes and bypasses |
-| **Testing** | Vitest | 36 unit tests covering routing, LLM, wards, and audit |
+* Framework: Next.js 16.4 (App Router, Turbopack, Cache Components, Partial Prerendering)
+* Language: TypeScript (strict mode, no any)
+* Database: Neon PostgreSQL with PostGIS extension (290 Delhi MCD MultiPolygon wards, GiST spatial index)
+* ORM: Prisma 6.19
+* AI and LLM: LangChain (`@langchain/core`, `@langchain/openai`) via OpenRouter, with built-in mock fallback
+* Speech-to-Text: Gnani Vachana STT API (`hi-IN`) with mock fallback
+* Maps: Leaflet, React-Leaflet, with fallback Turf.js spatial helpers
+* Testing: Vitest (unit tests mock-isolated; separate integration suite for database)
+* Container: Docker multi-stage build on Debian `node:22-slim`
 
----
+## Getting Started
 
-## Getting Started Locally
+### Prerequisites
 
-### 1. Clone & Install
+* Node.js 22 LTS
+* PostgreSQL instance with PostGIS extension enabled (such as Neon Postgres)
+
+### Installation
+
+Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/kaizen105/Garbage_unstop_project.git
 cd Garbage_unstop_project
 npm install
 ```
 
-### 2. Configure Environment
-Create a `.env` file in the root directory:
-```env
-# Optional: Gnani Vachana STT (if empty, uses fallback mock)
-GNANI_API_KEY=
-GNANI_STT_URL=https://api.vachana.ai/stt/v3
+### Environment Configuration
 
-# LLM Provider (mock | openrouter | evon)
-LLM_PROVIDER=openrouter
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_API_KEY=your_openrouter_api_key_here
-LLM_MODEL_EXTRACT=openrouter/free
-LLM_MODEL_AUDIT=openrouter/free
+Copy `.env.example` to `.env` and fill in the required variables:
 
-# Map provider
-NEXT_PUBLIC_MAP_PROVIDER=leaflet
+```bash
+cp .env.example .env
 ```
 
-*(Note: Setting `LLM_PROVIDER=mock` allows 100% offline local development without external API calls).*
+Environment variables configured in `.env.example`:
 
-### 3. Run Dev Server
+* `DATABASE_URL`: Pooled connection string for Neon PostgreSQL.
+* `DIRECT_URL`: Direct connection string for PostgreSQL schema migrations and pushes.
+* `LLM_PROVIDER`: Provider mode (`mock`, `openrouter`, or `evon`). Defaults to `mock`.
+* `LLM_BASE_URL`: Base URL for OpenRouter or custom endpoint (defaults to `https://openrouter.ai/api/v1`).
+* `LLM_API_KEY`: API key for the LLM provider. The code also accepts `OPENROUTER_API_KEY` as an alias.
+* `LLM_MODEL_EXTRACT`: Model slug for hazard extraction (defaults to `openrouter/free`).
+* `LLM_MODEL_AUDIT`: Model slug for audit and mitigation planning (defaults to `openrouter/free`).
+* `GNANI_API_KEY`: API key for Gnani speech transcription service. Optional; falls back to mock if empty.
+* `GNANI_STT_URL`: URL for Gnani speech-to-text service.
+* `NEXT_PUBLIC_MAP_PROVIDER`: Map tile provider (`leaflet` or `mapbox`, defaults to `leaflet`).
+
+Note on LLM providers: `LLM_PROVIDER=mock` is the default fallback. Mock mode produces deterministic template output without network or LLM calls. Real LLM execution was verified with `openrouter/free`. Because `openrouter/free` is a router that dynamically selects available free models, pinning a specific tool-calling model slug in `LLM_MODEL_AUDIT` is recommended for production.
+
+### Database Setup and Seeding
+
+Run database schema setup and ward polygon imports in this exact order:
+
+```bash
+# Push Prisma schema to Postgres
+npm run db:push
+
+# Import Delhi ward boundaries into PostGIS (requires data/delhi_wards.json)
+npm run db:import-wards
+
+# Seed database with initial synthetic reports and tag them against PostGIS
+npm run db:seed
+```
+
+### Start Development Server
+
 ```bash
 npm run dev
 ```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
----
+## Testing
 
-## Verification & Testing
-
-Every commit is verified with automated tests, type checking, and linting:
+The project maintains two distinct test setups:
 
 ```bash
-# Run 36 Vitest unit tests
+# Run unit tests (50 tests across 13 suites, completely offline, no DB or network access)
 npm test
 
-# Run TypeScript compilation check
-npm run typecheck
-
-# Run ESLint validation
-npm run lint
-
-# Build production bundle
-npm run build
+# Run integration tests (validates PostGIS ST_Covers queries and SQL aggregation against live Postgres)
+npm run test:int
 ```
 
-**Test Coverage Highlights:**
-- **36 / 36 unit tests passing**
-- STT audio payload validation, size limits, and 503 retry mechanics
-- Turf.js spatial ward point-in-polygon matching and unmapped boundary fallbacks
-- OSRM route parsing, detour cost formulas, and geodesic fallbacks
-- Anomaly cluster rankings with tie-break stability
-- Zod schema validations across all API inputs
+Continuous integration in GitHub Actions (`.github/workflows/test.yml`) runs unit tests only (`npm test`) alongside type checking and linting. Integration tests are not run in CI because no database service is provisioned during the workflow.
 
----
+## Docker Deployment
 
----
-
-## Docker & Container Deployment
-
-SafaiKavach provides a multi-stage Dockerfile built on `node:22-slim` producing a minimal standalone production container.
+The Dockerfile uses a multi-stage Debian build (`node:22-slim`) with non-root execution (`nextjs:nodejs`), producing a standalone Next.js server image.
 
 ### Building the Image
 
-Build the container locally (no database credentials or build-time secrets required):
+Build the container image locally without database credentials or build secrets:
 
 ```bash
 docker build -t safaikavach:local .
@@ -195,36 +146,64 @@ docker build -t safaikavach:local .
 
 ### Running the Container
 
-All secrets (`DATABASE_URL`, `DIRECT_URL`, `LLM_API_KEY`) must be passed at **runtime only**:
+All credentials must be supplied at runtime only. When using an environment file with the env-file flag, ensure values in `.env` do not contain wrapping quotes, as Docker passes quotes literally into container process environments:
 
 ```bash
-# Using an environment file
+# Run using an unquoted environment file
 docker run -p 3000:3000 --env-file .env safaikavach:local
+```
 
-# Or passing individual environment variables
+If your .env has quoted values, make an unquoted copy such as .env.docker and pass that instead. Keep it out of git.
+
+```bash
+# Or pass runtime variables directly
 docker run -p 3000:3000 \
-  -e DATABASE_URL="postgresql://user:pass@host/db?sslmode=require" \
-  -e DIRECT_URL="postgresql://user:pass@host/db?sslmode=require" \
-  -e LLM_API_KEY="sk-or-v1-..." \
+  -e DATABASE_URL="postgresql://user:password@host/neondb?sslmode=require" \
+  -e DIRECT_URL="postgresql://user:password@host/neondb?sslmode=require" \
   -e LLM_PROVIDER="openrouter" \
+  -e LLM_API_KEY="your-key-here" \
   safaikavach:local
 ```
 
-### Continuous Integration (CI)
+## Known Limitations
 
-A GitHub Actions workflow (`.github/workflows/test.yml`) runs on push and pull requests to validate:
-- Dependency installation (`npm ci`)
-- Prisma client generation (`npx prisma generate` without database connection)
-- Typecheck (`npm run typecheck`)
-- Linting (`npm run lint`)
-- Unit test suite (`npm test`, offline and mock-isolated)
+* Synthetic base data: All baseline incident records are synthetic demo data, except for live reports submitted during a session.
+* Pre-2022 ward boundaries: Ward polygons originate from DataMeet GeoJSON and predate the 2022 MCD 250-ward delimitation. Certain polygons feature boundary overlaps (for example, KHANPUR and TIGRI).
+* Early warning reads client state: The Early Warning tab (`src/lib/early-warning/trends.ts`) groups reports into 4 weekly windows based on `raw_location` matching, computing an anomaly score `(this_week - mean) / std` and a 4-point linear regression slope. It operates over reports loaded into client state rather than running direct Postgres aggregation queries.
+* Seed report dates: The synthetic seed reports use fixed relative date offsets computed at module import time (`src/data/seed_reports.ts`). The database seed or demo reset button must be run periodically to re-anchor incident dates to the current calendar week.
+* Unauthenticated write actions: The `submitReport` server action and `/api/report` endpoint currently lack authentication and per-IP rate limiting. The Zod schema enforces length boundaries (1 to 2000 characters) on submitted text, but validation against empty or oversized text has not been verified in tests.
+* LLM causes are hypotheses: Root causes and likely factors generated by the mitigation plan are model-generated qualitative hypotheses and require field inspection before municipal action.
+* Degraded mode unverified: The fallback path in the mitigation service for handling upstream LLM failure has not been covered by integration tests.
+* Docker image size: The standalone Docker image is approximately 710 MB due to broad file tracing includes covering local GeoJSON datasets and Prisma client binaries.
+* Turf usage: Turf.js remains in the codebase as a verification oracle for unit tests, landmark bounding checks, and client-side map rendering.
 
----
+## Project Structure
 
-## Authors & Hackathon Submission
-Built for the **AI First Product Builder Hackathon 2026** by:
-- **Yash Sharma** ([@kaizen105](https://github.com/kaizen105))
-
-**Project Links:**
-- **Live URL:** [https://garbage-unstop-project.vercel.app/](https://garbage-unstop-project.vercel.app/)
-- **Repository:** [https://github.com/kaizen105/Garbage_unstop_project](https://github.com/kaizen105/Garbage_unstop_project)
+```
+src/
+├── app/
+│   ├── actions/          # Server Actions (submitReport)
+│   ├── api/              # API routes (report, audit, mitigation-plan, wards)
+│   ├── layout.tsx        # Root HTML layout and font loading
+│   └── page.tsx          # Cache-component page with dynamic data suspense
+├── components/
+│   ├── dashboard/        # DashboardClient, EarlyWarningPanel, MitigationPlanPanel
+│   ├── map/              # Leaflet HazardMap and ward boundary rendering
+│   └── voice/            # VoiceReporter audio intake component
+├── data/
+│   └── seed_reports.ts   # Synthetic seed report definitions
+├── lib/
+│   ├── audit/            # Anomaly clustering and cluster math
+│   ├── db/               # Prisma singleton client (server-only)
+│   ├── early-warning/    # Hotspot ranking, linear projection, and anomaly scores
+│   ├── env.ts            # Zod environment variable validation
+│   ├── finance/          # Cost prevention formulas
+│   ├── gnani/            # Gnani Vachana STT client with retry logic
+│   ├── llm/              # Extraction prompts, parser, and provider interfaces
+│   ├── mitigation/       # Weekly aggregation SQL, LangChain chain, schema, grounding
+│   ├── reports/          # Report service, DTO mapper, and database operations
+│   ├── routing/          # OSRM bypass calculation and distance math
+│   ├── spatial/          # PostGIS tagWardDb query, landmark gazetteer, Turf fallback
+│   ├── store/            # Reports React context and view state
+│   └── utils/            # Category formatting helpers
+```
