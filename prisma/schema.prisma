@@ -1,10 +1,13 @@
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [postgis]
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 enum Role {
@@ -46,12 +49,16 @@ model User {
 }
 
 model Ward {
-  id         String     @id @default(cuid())
-  externalId String     @unique
-  name       String
+  id           String                                  @id @default(cuid())
+  externalId   String                                  @unique
+  name         String
+  sourceWardId String?
+  geom       Unsupported("geometry(MultiPolygon, 4326)")?
   users      User[]
   reports    Report[]
   audits     AuditRun[]
+
+  @@index([geom], type: Gist, map: "ward_geom_gist")
 }
 
 model Report {
@@ -63,9 +70,11 @@ model Report {
   lng                   Float?
   transcript            String
   transcriptMock        Boolean        @default(false)
+  translatedEnglish     String?
   actionRequired        ActionRequired
   status                ReportStatus   @default(OPEN)
   estimatedPreventedInr Int?
+  isSynthetic           Boolean        @default(false)
   reporterId            String?
   reporter              User?          @relation(fields: [reporterId], references: [id])
   wardId                String?
@@ -85,4 +94,16 @@ model AuditRun {
   rootCause       String
   recommendation  String
   createdAt       DateTime @default(now())
+}
+
+
+model MitigationPlan {
+  id                String   @id @default(cuid())
+  windowStart       DateTime
+  windowEnd         DateTime
+  model             String
+  includesSynthetic Boolean
+  aggregatesJson    Json
+  planJson          Json
+  createdAt         DateTime @default(now())
 }

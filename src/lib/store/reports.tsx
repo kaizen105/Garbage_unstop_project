@@ -1,9 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { seedReports as seedData } from "../../data/seed_reports";
-
+import React, { createContext, useContext, useState, useTransition } from "react";
 import type { WardTag } from "../validation/schemas";
+import { resetSyntheticData } from "@/app/actions/reports";
 
 export interface Report {
   report_id: string;
@@ -21,43 +20,58 @@ export interface Report {
 interface ReportsContextType {
   reports: Report[];
   addReport: (report: Report) => void;
-  loadDemoData: () => void;
-  clearReports: () => void;
+  loadDemoData: () => Promise<void>;
+  resetView: () => void;
+  isResetting: boolean;
 }
 
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
-export function ReportsProvider({ children }: { children: React.ReactNode }) {
-  const [reports, setReports] = useState<Report[]>([]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("safaikavach_reports");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (stored) setReports(JSON.parse(stored));
-    } catch {}
-  }, []);
+export function ReportsProvider({
+  children,
+  initialReports = [],
+}: {
+  children: React.ReactNode;
+  initialReports?: Report[];
+}) {
+  const [reports, setReports] = useState<Report[]>(initialReports);
+  const [isResetting, startTransition] = useTransition();
 
   const addReport = (report: Report) => {
-    setReports(prev => {
-      const next = [report, ...prev];
-      try { localStorage.setItem("safaikavach_reports", JSON.stringify(next)); } catch {}
-      return next;
+    setReports((prev) => [report, ...prev]);
+  };
+
+  const loadDemoData = async () => {
+    startTransition(async () => {
+      const res = await resetSyntheticData();
+      if (!res.ok) {
+        console.warn("[ReportsProvider] resetSyntheticData error:", res.error);
+        alert(res.error);
+        return;
+      }
+      // Trigger a page refresh to fetch the freshly seeded reports
+      window.location.reload();
     });
   };
 
-  const loadDemoData = () => {
-    setReports(seedData as unknown as Report[]);
-    try { localStorage.setItem("safaikavach_reports", JSON.stringify(seedData)); } catch {}
-  };
-
-  const clearReports = () => {
-    setReports([]);
-    try { localStorage.removeItem("safaikavach_reports"); } catch {}
+  /**
+   * Resets local view state to the initial server-provided reports.
+   * Does not pretend to delete database records.
+   */
+  const resetView = () => {
+    setReports(initialReports);
   };
 
   return (
-    <ReportsContext.Provider value={{ reports, addReport, loadDemoData, clearReports }}>
+    <ReportsContext.Provider
+      value={{
+        reports,
+        addReport,
+        loadDemoData,
+        resetView,
+        isResetting,
+      }}
+    >
       {children}
     </ReportsContext.Provider>
   );

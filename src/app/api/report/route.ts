@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { transcribeAudio, GnaniError } from "../../../lib/gnani/prisma";
-import { extractHazard } from "../../../lib/llm/extract";
-import { resolveCoordinates } from "../../../lib/spatial/locate";
-import { tagWard } from "../../../lib/spatial/wards";
+import { createReportRecord } from "../../../lib/reports/service";
 import { z } from "zod";
 
-const JsonBodySchema = z.object({
+export const JsonBodySchema = z.object({
   text: z.string().min(1).max(2000),
   lat: z.number().optional(),
-  lng: z.number().optional()
+  lng: z.number().optional(),
 });
 
 export function getActionRequired(category: string, severity: number) {
@@ -25,7 +23,7 @@ export function getActionRequired(category: string, severity: number) {
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
-    
+
     let text = "";
     let lat: number | undefined;
     let lng: number | undefined;
@@ -53,55 +51,55 @@ export async function POST(request: Request) {
       lat = parsed.lat;
       lng = parsed.lng;
     } else {
-      return NextResponse.json({ error: "UNSUPPORTED_MEDIA_TYPE", message: "Must be multipart/form-data or application/json" }, { status: 415 });
+      return NextResponse.json(
+        { error: "UNSUPPORTED_MEDIA_TYPE", message: "Must be multipart/form-data or application/json" },
+        { status: 415 }
+      );
     }
 
-    const extraction = await extractHazard(text);
-    const coords = resolveCoordinates({ lat, lng, rawLocation: extraction.raw_location });
-    
-    const action_required = getActionRequired(extraction.hazard_category, extraction.severity_level);
-    
-    const report_id = "HZ-" + Math.floor(1000 + Math.random() * 9000).toString();
-
-    const report = {
-      report_id,
-      hazard_category: extraction.hazard_category,
-      severity_level: extraction.severity_level,
-      raw_location: extraction.raw_location,
-      coordinates: coords ? { lat: coords.lat, lng: coords.lng } : null,
-      action_required,
-      ward: tagWard(coords ? { lat: coords.lat, lng: coords.lng } : null),
-      translated_english: extraction.translated_english || null
-    };
-
-    return NextResponse.json({
-      report,
-      transcript: text,
-      transcript_english: extraction.translated_english || null,
-      transcript_mock: isMock,
-      degraded: extraction.degraded || false,
-      degraded_reason: extraction.errorReason || null
+    const result = await createReportRecord({
+      text,
+      lat,
+      lng,
+      isMockTranscript: isMock,
     });
 
+    return NextResponse.json(result);
   } catch (error: unknown) {
     if (error instanceof GnaniError) {
       let status = 500;
       switch (error.kind) {
-        case "INVALID_AUDIO": case "AUDIO_TOO_LONG": status = 400; break;
-        case "AUDIO_TOO_LARGE": status = 413; break;
-        case "AUTH_OR_CREDITS": status = 401; break;
-        case "RATE_LIMITED": status = 429; break;
-        case "UPSTREAM_ERROR": status = 502; break;
-        case "TIMEOUT": status = 504; break;
-        case "EMPTY_TRANSCRIPT": case "BAD_RESPONSE": status = 422; break;
+        case "INVALID_AUDIO":
+        case "AUDIO_TOO_LONG":
+          status = 400;
+          break;
+        case "AUDIO_TOO_LARGE":
+          status = 413;
+          break;
+        case "AUTH_OR_CREDITS":
+          status = 401;
+          break;
+        case "RATE_LIMITED":
+          status = 429;
+          break;
+        case "UPSTREAM_ERROR":
+          status = 502;
+          break;
+        case "TIMEOUT":
+          status = 504;
+          break;
+        case "EMPTY_TRANSCRIPT":
+        case "BAD_RESPONSE":
+          status = 422;
+          break;
       }
       return NextResponse.json({ error: error.kind, message: error.message }, { status });
     }
-    
+
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "VALIDATION_ERROR", message: "Invalid payload" }, { status: 400 });
     }
-    
+
     console.error("[Report Route Error]", error);
     return NextResponse.json({ error: "INTERNAL_ERROR", message: "An unexpected error occurred" }, { status: 500 });
   }

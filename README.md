@@ -179,6 +179,48 @@ npm run build
 
 ---
 
+---
+
+## Docker & Container Deployment
+
+SafaiKavach provides a multi-stage Dockerfile built on `node:22-slim` producing a minimal standalone production container.
+
+### Building the Image
+
+Build the container locally (no database credentials or build-time secrets required):
+
+```bash
+docker build -t safaikavach:local .
+```
+
+### Running the Container
+
+All secrets (`DATABASE_URL`, `DIRECT_URL`, `LLM_API_KEY`) must be passed at **runtime only**:
+
+```bash
+# Using an environment file
+docker run -p 3000:3000 --env-file .env safaikavach:local
+
+# Or passing individual environment variables
+docker run -p 3000:3000 \
+  -e DATABASE_URL="postgresql://user:pass@host/db?sslmode=require" \
+  -e DIRECT_URL="postgresql://user:pass@host/db?sslmode=require" \
+  -e LLM_API_KEY="sk-or-v1-..." \
+  -e LLM_PROVIDER="openrouter" \
+  safaikavach:local
+```
+
+### Continuous Integration (CI)
+
+A GitHub Actions workflow (`.github/workflows/test.yml`) runs on push and pull requests to validate:
+- Dependency installation (`npm ci`)
+- Prisma client generation (`npx prisma generate` without database connection)
+- Typecheck (`npm run typecheck`)
+- Linting (`npm run lint`)
+- Unit test suite (`npm test`, offline and mock-isolated)
+
+---
+
 ## Authors & Hackathon Submission
 Built for the **AI First Product Builder Hackathon 2026** by:
 - **Yash Sharma** ([@kaizen105](https://github.com/kaizen105))

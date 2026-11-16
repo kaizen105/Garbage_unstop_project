@@ -1,175 +1,31 @@
-"use client";
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { listReports } from "@/lib/reports/service";
+import { ReportsProvider } from "@/lib/store/reports";
+import { DashboardClient } from "@/components/dashboard/DashboardClient";
 
-import { VoiceReporter } from "@/components/voice/VoiceReporter";
-import { useReports } from "@/lib/store/reports";
-import dynamic from "next/dynamic";
-import { useState } from "react";
-import { EarlyWarningPanel } from "@/components/dashboard/EarlyWarningPanel";
-import { estimateImpact } from "@/lib/finance/impact";
-import { humanizeCategory } from "@/lib/utils/format";
-
-const HazardMap = dynamic(() => import("@/components/map/HazardMap").then(m => m.HazardMap), { ssr: false });
-
-export default function Dashboard() {
-  const { reports, loadDemoData, clearReports } = useReports();
-  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-
-  const total = reports.length;
-  const highSev = reports.filter(r => r.severity_level >= 7).length;
-  const avgSev = total > 0 ? (reports.reduce((a, b) => a + b.severity_level, 0) / total).toFixed(1) : "0.0";
-  const hazmat = reports.filter(r => r.action_required.includes("hazmat")).length;
-  const totalNetInr = reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
-
-  const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [isAuditing, setIsAuditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"map" | "early_warning">("map");
-  const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
-
-  const handleSelectWard = (ward: string) => {
-    setSelectedWardName(ward);
-    setActiveTab("map");
-  };
-
-  const runAudit = async () => {
-    setIsAuditing(true);
-    try {
-      const auditReports = reports.map(r => ({
-        ward_id: r.ward?.ward_name ?? undefined,
-        hazard_category: r.hazard_category,
-        createdAt: r.createdAt,
-        lat: r.coordinates?.lat,
-        lng: r.coordinates?.lng
-      }));
-      const res = await fetch("/api/audit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reports: auditReports })
-      });
-      const data = await res.json();
-      setAuditResult(data);
-    } catch {
-      setAuditResult({ error: "Failed to run audit" });
-    }
-    setIsAuditing(false);
-  };
+async function DashboardWithData() {
+  // Next.js 16 Dynamic Data tracking under Cache Components / Partial Prerendering
+  await connection();
+  const reports = await listReports();
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
-      <header className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-red-500">SafaiKavach</h1>
-          <p className="text-sm text-slate-400">Hear the hazard before it hurts.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={loadDemoData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm transition-colors">Load Demo Data</button>
-          <button onClick={clearReports} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors">Clear</button>
-        </div>
-      </header>
+    <ReportsProvider initialReports={reports}>
+      <DashboardClient />
+    </ReportsProvider>
+  );
+}
 
-      <div className="flex flex-col md:flex-row flex-1 min-h-0 md:h-full h-auto overflow-y-auto md:overflow-hidden">
-        <div className="w-full md:w-[380px] flex flex-col border-r border-slate-800 bg-slate-900 md:overflow-y-auto p-4 gap-4 shrink-0">
-          <div className="border-b border-slate-800 shrink-0 pb-4">
-            <VoiceReporter />
-          </div>
-          
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold mb-4 text-slate-200">Recent Reports</h2>
-            <div className="space-y-3">
-              {reports.map(r => (
-                <div 
-                  key={r.report_id} 
-                  className={`p-3 rounded border cursor-pointer transition-colors ${selectedReportId === r.report_id ? 'bg-slate-800 border-red-500' : 'bg-slate-950 border-slate-800 hover:border-slate-600'}`}
-                  onClick={() => setSelectedReportId(r.report_id)}
-                >
-                  <div className="flex justify-between items-start">
-                    <span className="font-mono text-xs text-slate-400">{r.report_id}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded ${r.severity_level >= 7 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>Sev {r.severity_level}</span>
-                  </div>
-                  <h3 className="font-medium mt-1 truncate">{humanizeCategory(r.hazard_category)}</h3>
-                  <p className="text-sm text-slate-500 truncate">{r.raw_location}</p>
-                  {!r.coordinates && (
-                    <span className="text-[10px] bg-red-900/50 text-red-300 px-1.5 py-0.5 rounded mt-1 inline-block">
-                      Location not resolved
-                    </span>
-                  )}
-                </div>
-              ))}
-              {reports.length === 0 && (
-                <div className="text-center text-slate-500 text-sm py-8">No reports yet</div>
-              )}
-            </div>
-          </div>
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-screen bg-slate-900 text-slate-300">
+          Loading SafaiKavach Dashboard...
         </div>
-
-        <div className="flex-1 flex flex-col bg-slate-800 min-h-[500px] md:min-h-0 relative">
-          <div className="bg-slate-900 border-b border-slate-700 p-2 flex justify-center shrink-0">
-            <div className="bg-slate-950 rounded-full border border-slate-800 p-1 flex gap-1">
-              <button 
-                onClick={() => setActiveTab("map")} 
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === "map" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-              >
-                Live Map
-              </button>
-              <button 
-                onClick={() => setActiveTab("early_warning")} 
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === "early_warning" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-              >
-                Early Warning
-              </button>
-            </div>
-          </div>
-
-          <div className={`flex flex-col h-full ${activeTab === "map" ? "flex" : "hidden"}`}>
-            <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap items-center">
-            <div>Total: <span className="font-bold text-white">{total}</span></div>
-            <div>High Sev: <span className="font-bold text-red-400">{highSev}</span></div>
-            <div>Avg Sev: <span className="font-bold text-yellow-400">{avgSev}</span></div>
-            <div>Hazmat: <span className="font-bold text-orange-400">{hazmat}</span></div>
-            <div title="Estimated (illustrative assumptions)" className="cursor-help border-b border-dashed border-slate-500">
-              Est. prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
-            </div>
-            
-            <button 
-              onClick={runAudit} 
-              disabled={isAuditing} 
-              className="ml-auto bg-purple-600 hover:bg-purple-700 px-4 py-1 rounded text-sm font-bold shadow-lg flex items-center"
-            >
-              {isAuditing ? "Auditing..." : "Run Weekly Audit"}
-            </button>
-          </div>
-          <div className="flex-1 relative z-0">
-            <HazardMap selectedReportId={selectedReportId} onSelectReport={setSelectedReportId} auditResult={auditResult} selectedWardName={selectedWardName} />
-            
-            {auditResult && auditResult.status === "success" && (
-              <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-purple-500 max-w-sm">
-                <h3 className="font-bold text-purple-400 mb-2 flex items-center justify-between">
-                  Weekly Root-Cause Audit
-                  <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">AI-generated; verify on site</span>
-                </h3>
-                <div className="space-y-2 text-sm text-slate-300">
-                  <p><strong className="text-slate-100">Ward:</strong> {auditResult.ward as string} <span className="text-red-400">(+{auditResult.pct_increase as number}% anomaly)</span></p>
-                  <p><strong className="text-slate-100">Dominant Anomaly:</strong> {humanizeCategory(auditResult.dominant_anomaly as string)}</p>
-                  <p><strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause as string}</p>
-                  <p><strong className="text-slate-100">Recommended Action:</strong> {auditResult.recommendation as string}</p>
-                </div>
-                <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
-              </div>
-            )}
-            
-            {auditResult && auditResult.status === "insufficient_data" && (
-              <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-slate-500">
-                <p className="text-sm text-slate-300">Insufficient data for weekly audit (needs &gt;= 3 reports of same category in a ward this week).</p>
-                <button onClick={() => setAuditResult(null)} className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs">Dismiss</button>
-              </div>
-            )}
-          </div>
-          </div>
-          
-          {activeTab === "early_warning" && (
-            <EarlyWarningPanel reports={reports} onSelectWard={handleSelectWard} />
-          )}
-        </div>
-      </div>
-    </div>
+      }
+    >
+      <DashboardWithData />
+    </Suspense>
   );
 }

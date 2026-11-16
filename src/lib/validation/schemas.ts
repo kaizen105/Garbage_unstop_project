@@ -47,6 +47,7 @@ export type HazardReport = z.infer<typeof HazardReportSchema>;
 export const WardTagSchema = z.object({
   ward_id: z.string().nullable(),
   ward_name: z.string().nullable(),
+  external_id: z.string().optional().nullable(),
   status: z.enum(["matched", "unmapped", "invalid_coordinates"]),
 });
 export type WardTag = z.infer<typeof WardTagSchema>;

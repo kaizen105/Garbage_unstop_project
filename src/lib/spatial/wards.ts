@@ -4,8 +4,13 @@ import type { Feature, Polygon, MultiPolygon } from "geojson";
 
 const isDemo = (wardsData as { demo_boundaries?: boolean }).demo_boundaries === true;
 
+export function slugWardName(name: string): string {
+  // Uppercase, non-alphanumerics -> "-", trimmed
+  return name.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 export type WardTag = 
-  | { status: "matched"; ward_id: string; ward_name: string }
+  | { status: "matched"; ward_id: string; ward_name: string; external_id: string }
   | { status: "unmapped" }
   | { status: "invalid_coordinates" };
 
@@ -13,7 +18,12 @@ export function isDemoBoundaries(): boolean {
   return isDemo;
 }
 
-export function tagWard(coords: { lat: number; lng: number } | null): WardTag {
+/**
+ * Sync Turf-based ward tagging implementation.
+ * IMPORTANT: test oracle / static seed only.
+ * The production write path uses `tagWardDb` from `@/lib/spatial/wardsDb`.
+ */
+export function tagWardTurf(coords: { lat: number; lng: number } | null): WardTag {
   if (!coords) {
     return { status: "unmapped" };
   }
@@ -26,16 +36,23 @@ export function tagWard(coords: { lat: number; lng: number } | null): WardTag {
     const pt = turf.point([coords.lng, coords.lat]);
     for (const feature of (wardsData as { features: Feature<Polygon | MultiPolygon>[] }).features) {
       if (turf.booleanPointInPolygon(pt, feature)) {
+        const wardId = String(feature.properties?.ward_id ?? "");
+        const wardName = String(feature.properties?.ward_name ?? "");
+        const externalId = `${wardId}-${slugWardName(wardName)}`;
         return {
           status: "matched",
-          ward_id: feature.properties?.ward_id,
-          ward_name: feature.properties?.ward_name
+          ward_id: wardId,
+          ward_name: wardName,
+          external_id: externalId,
         };
       }
     }
   } catch (error) {
-    console.error("tagWard error:", error);
+    console.error("tagWardTurf error:", error);
   }
 
   return { status: "unmapped" };
 }
+
+// Backward-compatible alias for static modules & unit tests
+export const tagWard = tagWardTurf;

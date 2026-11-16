@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { humanizeCategory } from "@/lib/utils/format";
 import { useReports } from "@/lib/store/reports";
+import { submitReport } from "@/app/actions/reports";
 
 interface ReportResult {
   report: {
@@ -190,24 +191,29 @@ export function VoiceReporter() {
     setState("processing");
     try {
       const geo = await getGeo();
-      const payload: Record<string, unknown> = { text: textInput };
-      if (geo) {
-        payload.lat = geo.lat;
-        payload.lng = geo.lng;
-      }
-      const res = await fetch("/api/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      const actionRes = await submitReport({
+        text: textInput,
+        lat: geo?.lat,
+        lng: geo?.lng,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Server error");
-      setResult(data);
-      if (data.report) addReport(data.report);
+
+      if (!actionRes.ok) {
+        throw new Error(actionRes.error);
+      }
+
+      const clientReport = actionRes.data;
+      setResult({
+        report: clientReport,
+        transcript: clientReport.transcript || textInput,
+        transcript_english: clientReport.translated_english || null,
+        transcript_mock: false,
+        degraded: false,
+      });
+      addReport(clientReport);
       setState("success");
     } catch (err: unknown) {
       setState("error");
-      setErrorMsg((err as Error).message || "Failed to submit text");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to submit text");
     }
   };
 
