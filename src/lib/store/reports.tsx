@@ -20,6 +20,7 @@ export interface Report {
 interface ReportsContextType {
   reports: Report[];
   addReport: (report: Report) => void;
+  appendReports: (newReports: Report[]) => void;
   loadDemoData: () => Promise<void>;
   resetView: () => void;
   isResetting: boolean;
@@ -39,6 +40,14 @@ export function ReportsProvider({
 
   const addReport = (report: Report) => {
     setReports((prev) => [report, ...prev]);
+  };
+
+  const appendReports = (newReports: Report[]) => {
+    setReports((prev) => {
+      const existingIds = new Set(prev.map((r) => r.report_id));
+      const filtered = newReports.filter((r) => !existingIds.has(r.report_id));
+      return [...prev, ...filtered];
+    });
   };
 
   const loadDemoData = async () => {
@@ -67,6 +76,7 @@ export function ReportsProvider({
       value={{
         reports,
         addReport,
+        appendReports,
         loadDemoData,
         resetView,
         isResetting,

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Circle, CircleMarker, Popup, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { useReports } from "@/lib/store/reports";
+import { useReports, type Report as ClientReport } from "@/lib/store/reports";
 import type { GeoJsonObject } from "geojson";
 import { isDemoBoundaries } from "@/lib/spatial/wards";
 import L from "leaflet";
@@ -132,6 +132,7 @@ export interface HazardMapProps {
   auditResult?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   selectedWardName?: string | null;
   isActive?: boolean;
+  totalReportCount?: number;
 }
 
 export function HazardMap({
@@ -140,23 +141,66 @@ export function HazardMap({
   auditResult,
   selectedWardName,
   isActive = true,
+  totalReportCount,
 }: HazardMapProps) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
   const [showHotspots, setShowHotspots] = useState(false);
   const [routes, setRoutes] = useState<RoutesState | null>(null);
+  const [fetchedReport, setFetchedReport] = useState<ClientReport | null>(null);
+  const [sqlWardCounts, setSqlWardCounts] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     fetch("/api/wards").then(r => r.json()).then((data: FeatureCollection) => setWardsLayer(data)).catch(() => {});
   }, []);
 
+  // Fetch SQL-computed early warning ward counts for ward hotspot shading
+  useEffect(() => {
+    let active = true;
+    fetch("/api/early-warning")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (active && data?.wardCounts) {
+          setSqlWardCounts(data.wardCounts);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Look up selected report in local reports or fetch via GET /api/reports/[id]
   useEffect(() => {
     let active = true;
     if (selectedReportId) {
-      const report = reports.find(r => r.report_id === selectedReportId);
-      if (report && report.coordinates && (report.action_required.includes("bypass") || report.action_required.includes("hazmat"))) {
-        fetchRoute(report.coordinates).then(r => { if (active) setRoutes(r) }).catch(() => { if (active) setRoutes(null) });
+      const inList = reports.find((r) => r.report_id === selectedReportId);
+      if (!inList) {
+        // Selected report is outside the loaded slice: fetch individually
+        fetch(`/api/reports/${selectedReportId}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (active && data?.report) {
+              setFetchedReport(data.report);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [selectedReportId, reports]);
+
+  const selectedReport = (selectedReportId ? reports.find(r => r.report_id === selectedReportId) : null) || (fetchedReport?.report_id === selectedReportId ? fetchedReport : null);
+
+  useEffect(() => {
+    let active = true;
+    if (selectedReport) {
+      if (selectedReport.coordinates && (selectedReport.action_required.includes("bypass") || selectedReport.action_required.includes("hazmat"))) {
+        fetchRoute(selectedReport.coordinates).then(r => { if (active) setRoutes(r) }).catch(() => { if (active) setRoutes(null) });
         return () => { active = false; };
       }
     }
@@ -164,10 +208,9 @@ export function HazardMap({
       if (active) setRoutes(null);
     });
     return () => { active = false; };
-  }, [selectedReportId, reports]);
+  }, [selectedReport]);
 
-
-  if (reports.length === 0) {
+  if (reports.length === 0 && !selectedReport) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10 text-slate-400">
         No hazards reported yet
@@ -175,11 +218,10 @@ export function HazardMap({
     );
   }
 
-  const selectedReport = reports.find(r => r.report_id === selectedReportId);
   const selectedWardTag = selectedReport ? (selectedReport.ward as WardTag | undefined) : undefined;
   const wardFeature = wardsLayer && selectedWardTag ? findWardFeature(wardsLayer.features, selectedWardTag) : null;
 
-  const buckets = showHotspots ? weeklyBuckets(reports) : {};
+  const fallbackBuckets = showHotspots && !sqlWardCounts ? weeklyBuckets(reports) : {};
 
   const getWardStyle = (feature: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (showHotspots) {
@@ -190,7 +232,7 @@ export function HazardMap({
       else if (name.toLowerCase().includes("karol")) wardKey = "Karol Bagh";
       else wardKey = name;
       
-      const thisWeekCount = buckets[wardKey] ? buckets[wardKey]!.counts[0] : 0;
+      const thisWeekCount = sqlWardCounts ? (sqlWardCounts[wardKey] ?? 0) : (fallbackBuckets[wardKey] ? fallbackBuckets[wardKey]!.counts[0] : 0);
       let fillColor = "#3388ff"; 
       if (thisWeekCount >= 4) fillColor = "#ef4444"; 
       else if (thisWeekCount >= 2) fillColor = "#f97316"; 
@@ -201,6 +243,9 @@ export function HazardMap({
     }
     return { color: "#3388ff", weight: 1, fillOpacity: 0.1 };
   };
+
+  // Draw individual markers for the latest 300 reports only
+  const displayReports = reports.slice(0, 300);
 
   return (
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
@@ -252,7 +297,7 @@ export function HazardMap({
           <GeoJSON key={`hazmat-${selectedReportId}`} data={routes.hazmat.geometry as GeoJsonObject} style={{ color: "#f97316", weight: 4 }} />
         )}
 
-        {reports.map(r => {
+        {displayReports.map(r => {
           if (!r.coordinates) return null;
           const color = r.severity_level >= 7 ? "#ef4444" : "#eab308";
           const markerRadius = r.severity_level >= 7 ? 9 : 6;
@@ -286,8 +331,12 @@ export function HazardMap({
           );
         })}
 
-        <MapUpdater reports={reports} selectedId={selectedReportId} selectedWardName={selectedWardName} wardsLayer={wardsLayer} />
+        <MapUpdater reports={displayReports} selectedId={selectedReportId} selectedWardName={selectedWardName} wardsLayer={wardsLayer} />
       </MapContainer>
+
+      <div className="absolute top-4 left-4 z-[400] bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded shadow">
+        showing latest {Math.min(displayReports.length, 300)} of {totalReportCount ?? reports.length}
+      </div>
 
       <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-stretch w-36">
         <button 

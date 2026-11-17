@@ -17,17 +17,46 @@ export function generateReportId(): string {
   return "HZ-" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
+export interface ListReportsOptions {
+  limit?: number;
+  cursor?: string;
+}
+
 /**
- * Server-only function to list all reports with their joined ward,
- * mapped to the exact ClientReport DTO shape.
+ * Server-only function to list reports with limit and cursor,
+ * ordered by createdAt desc, id desc. Default limit 50, max 200.
  */
-export async function listReports(): Promise<ClientReport[]> {
+export async function listReports(options?: ListReportsOptions): Promise<ClientReport[]> {
+  const defaultLimit = 50;
+  const maxLimit = 200;
+  const limit = options?.limit !== undefined
+    ? Math.min(Math.max(1, options.limit), maxLimit)
+    : defaultLimit;
+
   const rows = await prisma.report.findMany({
-    orderBy: { createdAt: "desc" },
+    take: limit,
+    skip: options?.cursor ? 1 : 0,
+    cursor: options?.cursor ? { id: options.cursor } : undefined,
+    orderBy: [
+      { createdAt: "desc" },
+      { id: "desc" },
+    ],
     include: { ward: true },
   });
 
   return rows.map(toReportDTO);
+}
+
+/**
+ * Fetches a single report by ID with its joined ward relation.
+ */
+export async function getReportById(id: string): Promise<ClientReport | null> {
+  const row = await prisma.report.findUnique({
+    where: { id },
+    include: { ward: true },
+  });
+
+  return row ? toReportDTO(row) : null;
 }
 
 export interface CreateReportRecordInput {

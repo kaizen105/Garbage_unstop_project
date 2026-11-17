@@ -53,8 +53,9 @@ export function weeklyBuckets(reports: Report[], now: number = Date.now()): Reco
   return buckets;
 }
 
-export function scoreWard(buckets: WardBucket) {
-  const [this_week, w1, w2, w3] = buckets.counts;
+export function scoreWard(buckets: WardBucket | [number, number, number, number]) {
+  const counts: [number, number, number, number] = Array.isArray(buckets) ? buckets : buckets.counts;
+  const [this_week, w1, w2, w3] = counts;
   const prev_week = w1;
   const pct_change = prev_week === 0 ? (this_week > 0 ? 100 : 0) : ((this_week - prev_week) / prev_week) * 100;
   
@@ -68,7 +69,8 @@ export function scoreWard(buckets: WardBucket) {
   return { this_week, prev_week, pct_change, mean, std, anomaly_score };
 }
 
-export function projectNextWeek(counts: [number, number, number, number]) {
+export function projectNextWeek(input: [number, number, number, number] | { counts: [number, number, number, number] }) {
+  const counts: [number, number, number, number] = Array.isArray(input) ? input : input.counts;
   // xs: [0, 1, 2, 3] for [W-3, W-2, W-1, W0]
   const xs: [number, number, number, number] = [0, 1, 2, 3];
   const ys = [counts[3], counts[2], counts[1], counts[0]]; // reverse so 0 is oldest, 3 is newest
@@ -111,10 +113,29 @@ export function getCategoryDetails(category: string) {
   }
 }
 
-export function rankHotspots(reports: Report[], now: number = Date.now(), n: number = 5): HotspotRanking[] {
-  if (!reports || reports.length === 0) return [];
+export function rankHotspots(
+  input: Report[] | Record<string, WardBucket> | WardBucket[],
+  now: number = Date.now(),
+  n: number = 5
+): HotspotRanking[] {
+  if (!input) return [];
 
-  const buckets = weeklyBuckets(reports, now);
+  let buckets: Record<string, WardBucket>;
+  if (Array.isArray(input)) {
+    if (input.length === 0) return [];
+    const first = input[0];
+    if (first && "counts" in first && "ward" in first) {
+      buckets = {};
+      for (const b of input as WardBucket[]) {
+        buckets[b.ward] = b;
+      }
+    } else {
+      buckets = weeklyBuckets(input as Report[], now);
+    }
+  } else {
+    buckets = input;
+  }
+
   const rankings: HotspotRanking[] = [];
 
   for (const b of Object.values(buckets) as WardBucket[]) {

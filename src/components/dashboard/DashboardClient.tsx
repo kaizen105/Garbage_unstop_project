@@ -13,19 +13,76 @@ import { getDispatchBadge } from "@/lib/dispatch";
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then((m) => m.HazardMap), { ssr: false });
 
 export function DashboardClient() {
-  const { reports, loadDemoData, resetView, isResetting } = useReports();
+  const { reports, appendReports, loadDemoData, resetView, isResetting } = useReports();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
-  const total = reports.length;
-  const highSev = reports.filter((r) => r.severity_level >= 7).length;
-  const avgSev = total > 0 ? (reports.reduce((a, b) => a + b.severity_level, 0) / total).toFixed(1) : "0.0";
-  const hazmat = reports.filter((r) => r.action_required.includes("hazmat")).length;
-  const totalNetInr = reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
+  const [stats, setStats] = useState<{
+    total: number;
+    high_severity_count: number;
+    average_severity: number;
+    hazmat_count: number;
+    estimated_prevented: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchStats() {
+      try {
+        const res = await fetch("/api/stats");
+        if (res.ok && active) {
+          const data = await res.json();
+          setStats(data);
+        }
+      } catch (err: unknown) {
+        console.warn("Failed to load /api/stats:", err);
+      }
+    }
+    fetchStats();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const total = stats ? stats.total : reports.length;
+  const highSev = stats ? stats.high_severity_count : reports.filter((r) => r.severity_level >= 7).length;
+  const avgSev = stats
+    ? stats.average_severity.toFixed(1)
+    : (total > 0 ? (reports.reduce((a, b) => a + b.severity_level, 0) / total).toFixed(1) : "0.0");
+  const hazmat = stats ? stats.hazmat_count : reports.filter((r) => r.action_required.includes("hazmat")).length;
+  const totalNetInr = stats ? stats.estimated_prevented : reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
+
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const handleLoadMore = async () => {
+    if (reports.length === 0 || isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    try {
+      const lastReport = reports[reports.length - 1];
+      const cursor = lastReport ? lastReport.report_id : "";
+      const res = await fetch(`/api/reports?cursor=${cursor}&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reports && data.reports.length > 0) {
+          appendReports(data.reports);
+          if (!data.nextCursor || data.reports.length < 50) {
+            setHasMore(false);
+          }
+        } else {
+          setHasMore(false);
+        }
+      }
+    } catch (err: unknown) {
+      console.warn("Failed to load more reports:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [isAuditing, setIsAuditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"map" | "early_warning" | "mitigation">("map");
-    const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
+  const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<{
     reachable: boolean;
     wardCount: number;
@@ -62,17 +119,11 @@ export function DashboardClient() {
   const runAudit = async () => {
     setIsAuditing(true);
     try {
-      const auditReports = reports.map((r) => ({
-        ward_id: r.ward?.ward_name ?? undefined,
-        hazard_category: r.hazard_category,
-        createdAt: r.createdAt,
-        lat: r.coordinates?.lat,
-        lng: r.coordinates?.lng,
-      }));
+      // Server runs bounded SQL query when reports array is omitted
       const res = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reports: auditReports }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       setAuditResult(data);
@@ -178,6 +229,15 @@ export function DashboardClient() {
                 </div>
               ))}
               {reports.length === 0 && <div className="text-center text-slate-500 text-sm py-8">No reports yet</div>}
+              {hasMore && reports.length > 0 && (
+                <button
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="w-full mt-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded text-xs font-medium border border-slate-700 transition-colors"
+                >
+                  {isLoadingMore ? "Loading more..." : "Load more"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -248,6 +308,7 @@ export function DashboardClient() {
                 auditResult={auditResult}
                 selectedWardName={selectedWardName}
                 isActive={activeTab === "map"}
+                totalReportCount={total}
               />
 
               {auditResult && auditResult.status === "success" && (

@@ -1,33 +1,60 @@
 import { Report } from "@/lib/store/reports";
 import { rankHotspots } from "@/lib/early-warning/trends";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { humanizeCategory } from "@/lib/utils/format";
 import { CATEGORY_COLORS, ALL_HAZARD_CATEGORIES, getCategoryLabel } from "@/lib/categories";
 import { HazardCategory } from "@prisma/client";
+import type { EarlyWarningResponse } from "@/lib/early-warning/sqlBuckets";
 
 interface EarlyWarningPanelProps {
-  reports: Report[];
+  reports?: Report[];
   onSelectWard: (wardName: string) => void;
+  initialData?: EarlyWarningResponse | null;
 }
 
 // Category colors and labels derived from schema enum in @/lib/categories
 const catColors = CATEGORY_COLORS;
 
-export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelProps) {
-  const hotspots = useMemo(() => rankHotspots(reports), [reports]);
+export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: EarlyWarningPanelProps) {
+  const [serverData, setServerData] = useState<EarlyWarningResponse | null>(initialData ?? null);
+  const [isLoading, setIsLoading] = useState(!initialData);
+
+  useEffect(() => {
+    let active = true;
+    async function loadEarlyWarning() {
+      try {
+        const res = await fetch("/api/early-warning");
+        if (res.ok && active) {
+          const json: EarlyWarningResponse = await res.json();
+          setServerData(json);
+        }
+      } catch (err: unknown) {
+        console.warn("Failed to fetch /api/early-warning:", err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadEarlyWarning();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const fallbackHotspots = useMemo(() => (reports.length > 0 ? rankHotspots(reports) : []), [reports]);
+  const hotspots = serverData?.hotspots ?? fallbackHotspots;
   
   // Calculate citywide totals by week by category
-  const citywideByWeekAndCategory = useMemo(() => {
+  const fallbackCitywide = useMemo(() => {
     const latestReportTime = reports.reduce((max, r) => {
       const t = r.createdAt ? new Date(r.createdAt).getTime() : 0;
       return t > max ? t : max;
     }, 0);
     const now = latestReportTime || 0;
     const citywide = [
-      { week: "W-3", total: 0, counts: {} as Record<string, number> },
-      { week: "W-2", total: 0, counts: {} as Record<string, number> },
-      { week: "W-1", total: 0, counts: {} as Record<string, number> },
-      { week: "W0", total: 0, counts: {} as Record<string, number> }
+      { week: "W-3" as const, total: 0, counts: {} as Record<string, number> },
+      { week: "W-2" as const, total: 0, counts: {} as Record<string, number> },
+      { week: "W-1" as const, total: 0, counts: {} as Record<string, number> },
+      { week: "W0" as const, total: 0, counts: {} as Record<string, number> }
     ];
 
     for (const r of reports) {
@@ -46,7 +73,17 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
     return citywide;
   }, [reports]);
 
-  if (reports.length < 5) {
+  const citywideByWeekAndCategory = serverData?.citywide ?? fallbackCitywide;
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-slate-400">
+        <p>Loading early warning data from SQL...</p>
+      </div>
+    );
+  }
+
+  if (hotspots.length === 0 && reports.length < 5) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-slate-400">
         <p>Load demo data to see early warnings</p>

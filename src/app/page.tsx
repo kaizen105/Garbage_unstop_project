@@ -7,7 +7,7 @@ import { DashboardClient } from "@/components/dashboard/DashboardClient";
 async function DashboardWithData() {
   // Next.js 16 Dynamic Data tracking under Cache Components / Partial Prerendering
   await connection();
-  const reports = await listReports();
+  const reports = await listReports({ limit: 50 });
 
   return (
     <ReportsProvider initialReports={reports}>
