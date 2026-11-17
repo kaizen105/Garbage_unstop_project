@@ -6,22 +6,46 @@ export function samplePointInPolygon(
   randomFn: () => number = Math.random,
   maxAttempts: number = 200
 ): [number, number] | null {
-  const bbox = turf.bbox(feature); // [minX, minY, maxX, maxY]
-  const [minX, minY, maxX, maxY] = bbox;
+  const geom = feature.geometry;
+  if (!geom) return null;
+
+  let parts: number[][][][];
+  if (geom.type === "Polygon") {
+    parts = [geom.coordinates];
+  } else if (geom.type === "MultiPolygon") {
+    parts = geom.coordinates;
+  } else {
+    return null;
+  }
+
+  if (parts.length === 0) return null;
+
+  const partPolys = parts.map((coords) => turf.polygon(coords));
+  const partAreas = partPolys.map((poly) => Math.max(turf.area(poly), 1e-6));
+  const partBboxes = partPolys.map((poly) => turf.bbox(poly));
 
   for (let i = 0; i < maxAttempts; i++) {
+    const partIdx = pickWeightedIndex(partAreas, randomFn());
+    const bbox = partBboxes[partIdx]!;
+    const [minX, minY, maxX, maxY] = bbox;
+
     const lng = minX + randomFn() * (maxX - minX);
     const lat = minY + randomFn() * (maxY - minY);
     const pt = turf.point([lng, lat]);
 
+    // Test strictly against the full MultiPolygon / Polygon (all parts, honoring holes)
     if (turf.booleanPointInPolygon(pt, feature)) {
       return [lng, lat];
     }
   }
 
-  // Fallback to polygon centroid if rejection sampling exhausts attempts
-  const centroid = turf.centroid(feature);
-  return centroid.geometry.coordinates as [number, number];
+  // Guaranteed fallback: pointOnFeature verified against the feature
+  const onFeature = turf.pointOnFeature(feature);
+  if (turf.booleanPointInPolygon(onFeature, feature)) {
+    return onFeature.geometry.coordinates as [number, number];
+  }
+
+  return null;
 }
 
 export function pickWeightedIndex(weights: number[], randomVal: number): number {

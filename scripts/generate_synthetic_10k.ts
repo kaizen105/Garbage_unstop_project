@@ -2,9 +2,48 @@ import * as fs from "fs";
 import * as path from "path";
 import { HazardCategory, ActionRequired, ReportStatus } from "@prisma/client";
 import { getActionRequired } from "../src/lib/dispatch";
+import { slugWardName } from "../src/lib/spatial/wards";
 import { TRANSCRIPT_TEMPLATES } from "./data/transcript_templates";
 import { samplePointInPolygon, pickWeightedIndex, createPseudoRandom } from "./generator_utils";
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from "geojson";
+
+export function deriveWardExternalId(
+  feature: Feature<Polygon | MultiPolygon> | { properties?: { ward_id?: unknown; ward_name?: unknown; WARD_NAME?: unknown } | null }
+): string {
+  const props = feature.properties;
+  const wid = String(props?.ward_id ?? "").trim();
+  const wname = String(props?.ward_name ?? props?.WARD_NAME ?? "").trim();
+  const slugName = slugWardName(wname);
+  return `${wid}-${slugName}`;
+}
+
+export function verifyRecordsWardMapping(
+  records: Array<{ id: string; wardId: string | null }>,
+  expectedExternalIds: string[],
+  wardIdToExternalId: Map<string, string>
+): number {
+  if (records.length !== expectedExternalIds.length) {
+    throw new Error(
+      `Record count (${records.length}) does not match expected externalId count (${expectedExternalIds.length}).`
+    );
+  }
+  let checkedCount = 0;
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i]!;
+    const expectedExtId = expectedExternalIds[i]!;
+    if (!rec.wardId) {
+      throw new Error(`Row ${rec.id} has no wardId, expected externalId: "${expectedExtId}".`);
+    }
+    const dbExternalId = wardIdToExternalId.get(rec.wardId);
+    if (!dbExternalId || dbExternalId !== expectedExtId) {
+      throw new Error(
+        `Ward mismatch for row ${rec.id}: saved wardId "${rec.wardId}" resolves to DB externalId "${dbExternalId}", but point was sampled from feature externalId "${expectedExtId}".`
+      );
+    }
+    checkedCount++;
+  }
+  return checkedCount;
+}
 
 interface ProfileData {
   sourceFile: string;
@@ -104,24 +143,34 @@ export async function generateSyntheticData(options: GenerateOptions) {
   }
 
   // Ward DB map (only queried from Postgres if NOT in dry-run mode)
+  // Maps externalId -> Ward.id, and Ward.id -> externalId
   const wardDbMap = new Map<string, string>();
+  const wardIdToExternalId = new Map<string, string>();
   if (!dryRun) {
     const { PrismaClient } = await import("@prisma/client");
     const prisma = new PrismaClient();
     try {
       const dbWards = await prisma.ward.findMany({
-        select: { id: true, externalId: true, sourceWardId: true },
+        select: { id: true, externalId: true },
       });
       for (const w of dbWards) {
-        if (w.sourceWardId) {
-          wardDbMap.set(w.sourceWardId, w.id);
-        }
-        const dash = w.externalId.indexOf("-");
-        const pfx = dash !== -1 ? w.externalId.substring(0, dash) : w.externalId;
-        wardDbMap.set(pfx, w.id);
+        wardDbMap.set(w.externalId, w.id);
+        wardIdToExternalId.set(w.id, w.externalId);
       }
     } finally {
       await prisma.$disconnect();
+    }
+
+    // Verify each feature can be matched to exactly one Ward row in the database
+    for (const feat of wardFeatures) {
+      const extId = deriveWardExternalId(feat);
+      if (!wardDbMap.has(extId)) {
+        const wid = String(feat.properties?.ward_id ?? "").trim();
+        const wname = String(feat.properties?.ward_name ?? feat.properties?.WARD_NAME ?? "").trim();
+        throw new Error(
+          `Feature with externalId "${extId}" (ward_id: "${wid}", name: "${wname}") cannot be matched to any Ward in the database.`
+        );
+      }
     }
   }
 
@@ -201,6 +250,7 @@ export async function generateSyntheticData(options: GenerateOptions) {
   // Pareto verification: track top 25 ward count in baseline traffic
   let baselineTop25Count = 0;
 
+  const expectedExternalIds: string[] = [];
   const recordsToInsert: Array<{
     id: string;
     hazardCategory: HazardCategory;
@@ -242,8 +292,17 @@ export async function generateSyntheticData(options: GenerateOptions) {
     const timestampMs = baseDate.getTime();
 
     const wardName = String(chosenWardFeat.properties?.ward_name || chosenWardFeat.properties?.WARD_NAME || "Delhi Ward");
-    const wardIdProp = String(chosenWardFeat.properties?.ward_id || "");
-    const wardDbId = wardDbMap.get(wardIdProp) || null;
+    const expectedExtId = deriveWardExternalId(chosenWardFeat);
+    let wardDbId: string | null = null;
+    if (!dryRun) {
+      const matched = wardDbMap.get(expectedExtId);
+      if (!matched) {
+        throw new Error(
+          `Feature with externalId "${expectedExtId}" cannot be matched to exactly one Ward row in the database.`
+        );
+      }
+      wardDbId = matched;
+    }
 
     const sampledPt = samplePointInPolygon(chosenWardFeat, rng);
     const lng = sampledPt ? sampledPt[0] : null;
@@ -278,6 +337,7 @@ export async function generateSyntheticData(options: GenerateOptions) {
     hexCounter++;
     const reportId = `SYN-${hexId}`;
 
+    expectedExternalIds.push(expectedExtId);
     recordsToInsert.push({
       id: reportId,
       hazardCategory: chosenCategory,
@@ -314,8 +374,17 @@ export async function generateSyntheticData(options: GenerateOptions) {
     console.log(`- Ward: ${spike.wardName}, Category: ${spike.category}, Spike Count: ${spike.count}`);
     const chosenWardFeat = wardFeatures[spike.index]!;
     const wardName = spike.wardName;
-    const wardIdProp = String(chosenWardFeat.properties?.ward_id || "");
-    const wardDbId = wardDbMap.get(wardIdProp) || null;
+    const expectedExtId = deriveWardExternalId(chosenWardFeat);
+    let wardDbId: string | null = null;
+    if (!dryRun) {
+      const matched = wardDbMap.get(expectedExtId);
+      if (!matched) {
+        throw new Error(
+          `Spike ward feature with externalId "${expectedExtId}" cannot be matched to exactly one Ward row in the database.`
+        );
+      }
+      wardDbId = matched;
+    }
     const chosenCategory = spike.category;
 
     for (let k = 0; k < spike.count; k++) {
@@ -352,6 +421,7 @@ export async function generateSyntheticData(options: GenerateOptions) {
       hexCounter++;
       const reportId = `SYN-${hexId}`;
 
+      expectedExternalIds.push(expectedExtId);
       recordsToInsert.push({
         id: reportId,
         hazardCategory: chosenCategory,
@@ -409,6 +479,11 @@ export async function generateSyntheticData(options: GenerateOptions) {
     console.log("\n[DRY-RUN] Finished simulating 10k generation. Database was NOT queried or modified.");
     return;
   }
+
+  // Pre-insert verification guard: confirm DB ward matches sampled feature externalId for all rows
+  console.log(`\nVerifying wardId matches sampled feature externalId for all ${recordsToInsert.length} generated rows...`);
+  const checkedCount = verifyRecordsWardMapping(recordsToInsert, expectedExternalIds, wardIdToExternalId);
+  console.log(`Ward verification passed: ${checkedCount} rows checked successfully (0 mismatches).`);
 
   // Insert batches into database
   const { PrismaClient } = await import("@prisma/client");
