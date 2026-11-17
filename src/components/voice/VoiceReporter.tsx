@@ -5,6 +5,8 @@ import { humanizeCategory } from "@/lib/utils/format";
 import { useReports } from "@/lib/store/reports";
 import { submitReport } from "@/app/actions/reports";
 
+import type { PipelineTrace } from "@/lib/trace";
+
 interface ReportResult {
   report: {
     report_id: string;
@@ -18,6 +20,7 @@ interface ReportResult {
   transcript_mock: boolean;
   degraded: boolean;
   degraded_reason?: string | null;
+  trace?: PipelineTrace;
 }
 
 export function VoiceReporter() {
@@ -222,13 +225,14 @@ export function VoiceReporter() {
         throw new Error(actionRes.error);
       }
 
-      const clientReport = actionRes.data;
+      const { report: clientReport, trace } = actionRes.data;
       setResult({
         report: clientReport,
         transcript: clientReport.transcript || textInput,
         transcript_english: clientReport.translated_english || null,
         transcript_mock: false,
         degraded: false,
+        trace,
       });
       addReport(clientReport);
       setState("success");
@@ -318,6 +322,40 @@ export function VoiceReporter() {
           <p className="text-xs"><strong>Severity:</strong> {result.report.severity_level}/10</p>
           <p className="text-xs"><strong>Location:</strong> {result.report.raw_location || <span className="text-slate-400 italic">Location not resolved</span>}</p>
           <p className="text-xs"><strong>Action:</strong> {result.report.action_required}</p>
+
+          {result.trace && (
+            <div className="mt-2 text-xs bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
+              <div className="flex justify-between items-center text-slate-400 font-semibold border-b border-slate-800 pb-1">
+                <span>Pipeline trace ({result.trace.stages.length} stages)</span>
+                <span className="font-mono text-emerald-400">{result.trace.totalMs}ms</span>
+              </div>
+              <div className="space-y-1">
+                {result.trace.stages.map((st, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-[11px]">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className={st.ok ? "text-emerald-400" : "text-red-400 font-bold"}>
+                        {st.ok ? "✓" : "✗"}
+                      </span>
+                      <span className="font-medium text-slate-300">{st.stage}</span>
+                      {st.detail && <span className="text-slate-500 truncate">({st.detail})</span>}
+                    </div>
+                    <span className="font-mono text-slate-400 ml-2 shrink-0">{st.ms}ms</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-1 border-t border-slate-800/80 text-[10px] text-slate-400 flex justify-between">
+                <span>Coordinate source:</span>
+                <span className="font-medium text-slate-300 uppercase">
+                  {result.trace.coordinateSource === "gps"
+                    ? "GPS"
+                    : result.trace.coordinateSource === "gazetteer"
+                    ? "Gazetteer"
+                    : "Unresolved"}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="mt-2 text-xs text-slate-300 bg-slate-900/90 p-2.5 rounded border border-slate-800">
             <div><strong className="text-slate-400">Original ({result.report.raw_location ? "Spoken" : "Audio"}):</strong> {result.transcript}</div>
             {result.transcript_english && result.transcript_english !== result.transcript && (

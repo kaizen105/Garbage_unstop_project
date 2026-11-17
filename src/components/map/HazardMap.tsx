@@ -11,7 +11,7 @@ import { estimateImpact } from "@/lib/finance/impact";
 import { weeklyBuckets } from "@/lib/early-warning/trends";
 
 import { WardTag } from "@/lib/spatial/wards";
-import type { FeatureCollection, Feature } from "geojson";
+import type { FeatureCollection } from "geojson";
 import { humanizeCategory } from "@/lib/utils/format";
 import { OSM_DARK_TILE_CONFIG } from "@/lib/mapTiles";
 import { findWardFeature } from "@/lib/spatial/findWardFeature";

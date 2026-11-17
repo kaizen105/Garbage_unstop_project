@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { createReportRecord } from "@/lib/reports/service";
 import type { Report as ClientReport } from "@/lib/store/reports";
+import type { PipelineTrace } from "@/lib/trace";
 import { seedReports } from "@/data/seed_reports";
 import { tagWardDb } from "@/lib/spatial/wardsDb";
 import { HazardCategory, ActionRequired, ReportStatus } from "@prisma/client";
@@ -28,7 +29,7 @@ export type ServerActionResult<T> =
  * tags ward, and persists with isSynthetic=false.
  * Revalidates "/".
  */
-export async function submitReport(rawInput: unknown): Promise<ServerActionResult<ClientReport>> {
+export async function submitReport(rawInput: unknown): Promise<ServerActionResult<{ report: ClientReport; trace: PipelineTrace }>> {
   try {
     const parseResult = SubmitReportInputSchema.safeParse(rawInput);
     if (!parseResult.success) {
@@ -46,7 +47,7 @@ export async function submitReport(rawInput: unknown): Promise<ServerActionResul
     });
 
     revalidatePath("/");
-    return { ok: true, data: result.report };
+    return { ok: true, data: { report: result.report, trace: result.trace } };
   } catch (err: unknown) {
     console.error("[submitReport Action Error]:", err);
     return { ok: false, error: "Failed to submit report. Please try again." };

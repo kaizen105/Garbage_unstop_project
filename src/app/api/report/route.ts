@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { transcribeAudio, GnaniError } from "../../../lib/gnani/prisma";
 import { createReportRecord } from "../../../lib/reports/service";
 import { z } from "zod";
+import { TraceStage, timeStage } from "../../../lib/trace";
 
 export const JsonBodySchema = z.object({
   text: z.string().min(1).max(2000),
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     let lat: number | undefined;
     let lng: number | undefined;
     let isMock = false;
+    const audioStages: TraceStage[] = [];
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
@@ -41,7 +43,13 @@ export async function POST(request: Request) {
       }
 
       const filename = (audioFile as File).name || "audio.wav";
-      const transcript = await transcribeAudio({ audio: audioFile, filename, languageCode });
+      
+      const transcript = await timeStage(
+        audioStages,
+        "Transcription",
+        () => transcribeAudio({ audio: audioFile, filename, languageCode }),
+        (res) => (res.mock ? "Mock STT" : "Gnani STT")
+      );
       text = transcript.text;
       isMock = transcript.mock;
     } else if (contentType.includes("application/json")) {
@@ -63,6 +71,11 @@ export async function POST(request: Request) {
       lng,
       isMockTranscript: isMock,
     });
+
+    if (audioStages.length > 0) {
+      result.trace.stages = [...audioStages, ...result.trace.stages];
+      result.trace.totalMs = Math.round((result.trace.totalMs + audioStages[0]!.ms) * 10) / 10;
+    }
 
     return NextResponse.json(result);
   } catch (error: unknown) {

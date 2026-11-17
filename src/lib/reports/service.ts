@@ -8,6 +8,7 @@ import { resolveCoordinates } from "@/lib/spatial/locate";
 import { tagWardDb } from "@/lib/spatial/wardsDb";
 import { getActionRequired } from "@/app/api/report/route";
 import * as crypto from "crypto";
+import { PipelineTrace, TraceStage, timeStage } from "@/lib/trace";
 
 /**
  * Generates server-side report ID: "HZ-" + 8 uppercase base32/hex chars.
@@ -43,6 +44,7 @@ export interface CreateReportRecordResult {
   transcript_mock: boolean;
   degraded: boolean;
   degraded_reason: string | null;
+  trace: PipelineTrace;
 }
 
 /**
@@ -53,74 +55,111 @@ export interface CreateReportRecordResult {
  * 4. Tags ward via PostGIS tagWardDb
  * 5. Generates unique report ID ("HZ-" + 8 random hex chars) with up to 3 retries on P2002 collision
  * 6. Persists to Postgres (isSynthetic = false)
- * 7. Returns client Report DTO + diagnostic metadata
+ * 7. Returns client Report DTO + diagnostic metadata + pipeline trace
  */
 export async function createReportRecord(input: CreateReportRecordInput): Promise<CreateReportRecordResult> {
-  const extraction = await extractHazard(input.text);
-  const coords = resolveCoordinates({ lat: input.lat, lng: input.lng, rawLocation: extraction.raw_location });
-  const actionRequired = getActionRequired(extraction.hazard_category, extraction.severity_level);
+  const stages: TraceStage[] = [];
+  const pipelineStart = performance.now();
 
-  // Tag ward using PostGIS ST_Covers
+  const extraction = await timeStage(
+    stages,
+    "LLM extraction",
+    () => extractHazard(input.text),
+    (res) => (res.degraded ? `Degraded (${res.errorReason || "fallback"})` : "Nominal")
+  );
+
+  const coords = await timeStage(
+    stages,
+    "Coordinate resolution",
+    () => resolveCoordinates({ lat: input.lat, lng: input.lng, rawLocation: extraction.raw_location }),
+    (res) => (res ? `Source: ${res.source}` : "Unresolved")
+  );
+
   let wardDbId: string | null = null;
   if (coords) {
-    const wardTag = await tagWardDb(coords.lat, coords.lng);
+    const wardTag = await timeStage(
+      stages,
+      "Ward tagging",
+      () => tagWardDb(coords.lat, coords.lng),
+      (res) => (res.status === "matched" ? res.ward_name : `Status: ${res.status}`)
+    );
     if (wardTag.status === "matched") {
       wardDbId = wardTag.db_id;
     }
   }
 
+  const actionRequired = await timeStage(
+    stages,
+    "Dispatch rule",
+    () => getActionRequired(extraction.hazard_category, extraction.severity_level),
+    (res) => res
+  );
+
   // Retry up to 3 times on P2002 unique constraint collision
-  let attempts = 0;
-  const maxAttempts = 3;
-  let savedReport = null;
+  const savedReport = await timeStage(
+    stages,
+    "Database write",
+    async () => {
+      let attempts = 0;
+      const maxAttempts = 3;
+      let created = null;
 
-  while (attempts < maxAttempts) {
-    attempts++;
-    const reportId = generateReportId();
+      while (attempts < maxAttempts) {
+        attempts++;
+        const reportId = generateReportId();
 
-    try {
-      savedReport = await prisma.report.create({
-        data: {
-          id: reportId,
-          hazardCategory: extraction.hazard_category as HazardCategory,
-          severityLevel: extraction.severity_level,
-          rawLocation: extraction.raw_location,
-          lat: coords?.lat ?? null,
-          lng: coords?.lng ?? null,
-          transcript: input.text,
-          transcriptMock: input.isMockTranscript ?? false,
-          translatedEnglish: extraction.translated_english ?? null,
-          actionRequired: actionRequired as ActionRequired,
-          status: ReportStatus.OPEN,
-          isSynthetic: false,
-          wardId: wardDbId,
-        },
-        include: { ward: true },
-      });
-      break;
-    } catch (err: unknown) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        if (attempts >= maxAttempts) {
-          throw new Error("Failed to generate unique report ID after 3 attempts.");
+        try {
+          created = await prisma.report.create({
+            data: {
+              id: reportId,
+              hazardCategory: extraction.hazard_category as HazardCategory,
+              severityLevel: extraction.severity_level,
+              rawLocation: extraction.raw_location,
+              lat: coords?.lat ?? null,
+              lng: coords?.lng ?? null,
+              transcript: input.text,
+              transcriptMock: input.isMockTranscript ?? false,
+              translatedEnglish: extraction.translated_english ?? null,
+              actionRequired: actionRequired as ActionRequired,
+              status: ReportStatus.OPEN,
+              isSynthetic: false,
+              wardId: wardDbId,
+            },
+            include: { ward: true },
+          });
+          break;
+        } catch (err: unknown) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            if (attempts >= maxAttempts) {
+              throw new Error("Failed to generate unique report ID after 3 attempts.");
+            }
+            continue;
+          }
+          throw err;
         }
-        continue;
       }
-      throw err;
+
+      if (!created) {
+        throw new Error("Failed to save report to database.");
+      }
+      return created;
     }
-  }
+  );
 
-  if (!savedReport) {
-    throw new Error("Could not create report record.");
-  }
-
-  const clientReport = toReportDTO(savedReport);
+  const totalMs = Math.round((performance.now() - pipelineStart) * 10) / 10;
+  const coordinateSource = coords ? coords.source : "unresolved";
 
   return {
-    report: clientReport,
+    report: toReportDTO(savedReport),
     transcript: input.text,
     transcript_english: extraction.translated_english ?? null,
     transcript_mock: input.isMockTranscript ?? false,
-    degraded: extraction.degraded || false,
-    degraded_reason: extraction.errorReason || null,
+    degraded: extraction.degraded ?? false,
+    degraded_reason: extraction.errorReason ?? null,
+    trace: {
+      stages,
+      totalMs,
+      coordinateSource,
+    },
   };
 }
