@@ -14,6 +14,7 @@ import { WardTag } from "@/lib/spatial/wards";
 import type { FeatureCollection, Feature } from "geojson";
 import { humanizeCategory } from "@/lib/utils/format";
 import { OSM_DARK_TILE_CONFIG } from "@/lib/mapTiles";
+import { findWardFeature } from "@/lib/spatial/findWardFeature";
 
 async function fetchRoute(coords: { lat: number; lng: number }) {
   const res = await fetch("/api/route", {
@@ -48,14 +49,7 @@ function MapUpdater({ reports, selectedId, selectedWardName, wardsLayer }: { rep
     }
   }, [reports, map, selectedId, selectedWardName, wardsLayer]);
 
-  useEffect(() => {
-    if (selectedId) {
-      const report = reports.find(r => r.report_id === selectedId);
-      if (report && report.coordinates) {
-        map.setView([report.coordinates.lat, report.coordinates.lng], 15);
-      }
-    }
-  }, [selectedId, reports, map]);
+// Selection movement handled cleanly by FlyToReport
   return null;
 }
 
@@ -74,6 +68,26 @@ interface RoutesState {
 
 interface MapResizerProps {
   isActive?: boolean;
+}
+
+interface FlyToReportProps {
+  selectedReport?: { coordinates: { lat: number; lng: number } | null } | null;
+  hasRoute?: boolean;
+}
+
+function FlyToReport({ selectedReport, hasRoute = false }: FlyToReportProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Only flyTo if the selected report has coordinates and route bounding is not active
+    if (selectedReport && selectedReport.coordinates && !hasRoute) {
+      map.flyTo([selectedReport.coordinates.lat, selectedReport.coordinates.lng], 14, {
+        duration: 1,
+      });
+    }
+  }, [selectedReport, hasRoute, map]);
+
+  return null;
 }
 
 function MapResizer({ isActive = true }: MapResizerProps) {
@@ -162,9 +176,8 @@ export function HazardMap({
   }
 
   const selectedReport = reports.find(r => r.report_id === selectedReportId);
-  const wardFeature = showWards && selectedReport && (selectedReport.ward as WardTag)?.status === "matched" && wardsLayer
-    ? wardsLayer.features.find((f: Feature) => f.properties?.ward_id === (selectedReport.ward as Extract<WardTag, { status: "matched" }>).ward_id)
-    : null;
+  const selectedWardTag = selectedReport ? (selectedReport.ward as WardTag | undefined) : undefined;
+  const wardFeature = wardsLayer && selectedWardTag ? findWardFeature(wardsLayer.features, selectedWardTag) : null;
 
   const buckets = showHotspots ? weeklyBuckets(reports) : {};
 
@@ -193,6 +206,7 @@ export function HazardMap({
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
       <MapContainer bounds={[[28.50,77.05],[28.72,77.32]]} maxZoom={12} style={{ height: "100%", width: "100%", zIndex: 1, backgroundColor: "#0f172a" }}>
         <MapResizer isActive={isActive} />
+        <FlyToReport selectedReport={selectedReport} hasRoute={Boolean(routes?.planned || routes?.bypass || routes?.hazmat)} />
         <TileLayer
           url={OSM_DARK_TILE_CONFIG.url}
           subdomains={OSM_DARK_TILE_CONFIG.subdomains}
@@ -212,11 +226,11 @@ export function HazardMap({
           />
         )}
 
-        {wardFeature && (
+        {wardFeature && selectedWardTag?.status === "matched" && (
           <GeoJSON 
-            key={(selectedReport?.ward as Extract<WardTag, { status: "matched" }>).ward_id}
-            data={wardFeature} 
-            style={{ color: "#ff3333", weight: 2, fillOpacity: 0.2 }}
+            key={`highlight-${selectedWardTag.ward_id}`}
+            data={wardFeature as GeoJsonObject} 
+            style={{ color: "#38bdf8", weight: 3, fillColor: "#38bdf8", fillOpacity: 0.25 }}
           />
         )}
 

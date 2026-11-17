@@ -8,6 +8,7 @@ import { EarlyWarningPanel } from "@/components/dashboard/EarlyWarningPanel";
 import { MitigationPlanPanel } from "@/components/dashboard/MitigationPlanPanel";
 import { estimateImpact } from "@/lib/finance/impact";
 import { humanizeCategory } from "@/lib/utils/format";
+import { getDispatchBadge } from "@/lib/dispatch";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then((m) => m.HazardMap), { ssr: false });
 
@@ -141,15 +142,31 @@ export function DashboardClient() {
                   }`}
                   onClick={() => setSelectedReportId(r.report_id)}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-1">
                     <span className="font-mono text-xs text-slate-400">{r.report_id}</span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        r.severity_level >= 7 ? "bg-red-500/20 text-red-400" : "bg-yellow-500/20 text-yellow-400"
-                      }`}
-                    >
-                      Sev {r.severity_level}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {(() => {
+                        const badge = getDispatchBadge(r.action_required);
+                        const toneClasses =
+                          badge.tone === "danger"
+                            ? "bg-red-950/80 border border-red-800 text-red-300"
+                            : badge.tone === "warning"
+                            ? "bg-amber-950/80 border border-amber-800 text-amber-300"
+                            : "bg-slate-800 border border-slate-700 text-slate-300";
+                        return (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold tracking-wide ${toneClasses}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          r.severity_level >= 7 ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                        }`}
+                      >
+                        Sev {r.severity_level}
+                      </span>
+                    </div>
                   </div>
                   <h3 className="font-medium mt-1 truncate">{humanizeCategory(r.hazard_category)}</h3>
                   <p className="text-sm text-slate-500 truncate">{r.raw_location}</p>
