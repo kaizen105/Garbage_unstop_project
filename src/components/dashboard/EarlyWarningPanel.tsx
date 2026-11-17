@@ -2,21 +2,16 @@ import { Report } from "@/lib/store/reports";
 import { rankHotspots } from "@/lib/early-warning/trends";
 import { useMemo } from "react";
 import { humanizeCategory } from "@/lib/utils/format";
+import { CATEGORY_COLORS, ALL_HAZARD_CATEGORIES, getCategoryLabel } from "@/lib/categories";
+import { HazardCategory } from "@prisma/client";
 
 interface EarlyWarningPanelProps {
   reports: Report[];
   onSelectWard: (wardName: string) => void;
 }
 
-const catColors: Record<string, string> = {
-  construction_debris: "#94a3b8",
-  biohazard_medical: "#ef4444",
-  general_overflow: "#eab308",
-  chemical: "#a855f7",
-  electrical_hazard: "#f97316",
-  unknown: "#64748b",
-  dead_animal: "#14b8a6",
-};
+// Category colors and labels derived from schema enum in @/lib/categories
+const catColors = CATEGORY_COLORS;
 
 export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelProps) {
   const hotspots = useMemo(() => rankHotspots(reports), [reports]);
@@ -171,7 +166,7 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
                       y={yOffset} 
                       width={barWidth} 
                       height={rectHeight} 
-                      fill={catColors[cat] || catColors.unknown} 
+                      fill={catColors[cat as HazardCategory] || catColors.unknown} 
                     />
                   );
                 });
@@ -191,10 +186,10 @@ export function EarlyWarningPanel({ reports, onSelectWard }: EarlyWarningPanelPr
             })()}
           </svg>
           <div className="flex flex-col gap-2">
-            {Object.keys(catColors).map(cat => (
+            {ALL_HAZARD_CATEGORIES.map((cat: HazardCategory) => (
               <div key={cat} className="flex items-center gap-2 text-xs text-slate-300">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: catColors[cat] }}></div>
-                {humanizeCategory(cat)}
+                {getCategoryLabel(cat)}
               </div>
             ))}
           </div>

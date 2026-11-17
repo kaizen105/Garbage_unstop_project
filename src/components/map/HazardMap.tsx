@@ -13,6 +13,7 @@ import { weeklyBuckets } from "@/lib/early-warning/trends";
 import { WardTag } from "@/lib/spatial/wards";
 import type { FeatureCollection, Feature } from "geojson";
 import { humanizeCategory } from "@/lib/utils/format";
+import { OSM_DARK_TILE_CONFIG } from "@/lib/mapTiles";
 
 async function fetchRoute(coords: { lat: number; lng: number }) {
   const res = await fetch("/api/route", {
@@ -71,7 +72,61 @@ interface RoutesState {
   approximate?: boolean;
 }
 
-export function HazardMap({ selectedReportId, onSelectReport, auditResult, selectedWardName }: { selectedReportId: string | null, onSelectReport: (id: string) => void, auditResult?: any, selectedWardName?: string | null }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+interface MapResizerProps {
+  isActive?: boolean;
+}
+
+function MapResizer({ isActive = true }: MapResizerProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Initial size invalidation on mount
+    map.invalidateSize();
+
+    const container = map.getContainer();
+    if (!container || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [map, isActive]);
+
+  return null;
+}
+
+export interface HazardMapProps {
+  selectedReportId: string | null;
+  onSelectReport: (id: string) => void;
+  auditResult?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  selectedWardName?: string | null;
+  isActive?: boolean;
+}
+
+export function HazardMap({
+  selectedReportId,
+  onSelectReport,
+  auditResult,
+  selectedWardName,
+  isActive = true,
+}: HazardMapProps) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
   const [showWards, setShowWards] = useState(false);
@@ -136,10 +191,14 @@ export function HazardMap({ selectedReportId, onSelectReport, auditResult, selec
 
   return (
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
-      <MapContainer bounds={[[28.50,77.05],[28.72,77.32]]} maxZoom={12} style={{ height: "100%", width: "100%", zIndex: 1 }}>
+      <MapContainer bounds={[[28.50,77.05],[28.72,77.32]]} maxZoom={12} style={{ height: "100%", width: "100%", zIndex: 1, backgroundColor: "#0f172a" }}>
+        <MapResizer isActive={isActive} />
         <TileLayer
-          attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url={OSM_DARK_TILE_CONFIG.url}
+          subdomains={OSM_DARK_TILE_CONFIG.subdomains}
+          maxZoom={OSM_DARK_TILE_CONFIG.maxZoom}
+          attribution={OSM_DARK_TILE_CONFIG.attribution}
+          className={OSM_DARK_TILE_CONFIG.className}
         />
         
         {wardsLayer && showWards && (

@@ -94,3 +94,30 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
     };
   }
 }
+
+
+export async function getLatestCachedPlan(): Promise<GeneratePlanResult> {
+  const latest = await prisma.mitigationPlan.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!latest) {
+    return {
+      status: "no_data",
+      generatedAt: new Date().toISOString(),
+      cached: true,
+      includesSynthetic: false,
+      model: "none",
+    };
+  }
+
+  return {
+    status: "ok",
+    plan: latest.planJson as unknown as GroundedMitigationPlan,
+    aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
+    generatedAt: latest.createdAt.toISOString(),
+    cached: true,
+    includesSynthetic: latest.includesSynthetic,
+    model: latest.model,
+  };
+}

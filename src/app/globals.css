@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* OpenStreetMap Dark Theme Tile Filter */
+.osm-dark-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
+}
+
+/* Ensure map container background is dark slate to prevent white flash */
+.leaflet-container {
+  background-color: #0f172a !important; /* Tailwind slate-900 */
+}

@@ -40,3 +40,17 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function GET() {
+  try {
+    const { getLatestCachedPlan } = await import("@/lib/mitigation/service");
+    const result = await getLatestCachedPlan();
+    return NextResponse.json(result);
+  } catch (error: unknown) {
+    console.error("GET /api/mitigation-plan error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
+  }
+}

@@ -3,7 +3,7 @@
 import { VoiceReporter } from "@/components/voice/VoiceReporter";
 import { useReports } from "@/lib/store/reports";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EarlyWarningPanel } from "@/components/dashboard/EarlyWarningPanel";
 import { MitigationPlanPanel } from "@/components/dashboard/MitigationPlanPanel";
 import { estimateImpact } from "@/lib/finance/impact";
@@ -24,7 +24,34 @@ export function DashboardClient() {
   const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [isAuditing, setIsAuditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"map" | "early_warning" | "mitigation">("map");
-  const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
+    const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<{
+    reachable: boolean;
+    wardCount: number;
+    reportCount: number;
+    demoResetEnabled: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchHealth() {
+      try {
+        const res = await fetch("/api/health");
+        if (res.ok && active) {
+          const data = await res.json();
+          setHealthStatus(data);
+        }
+      } catch {
+        if (active) {
+          setHealthStatus({ reachable: false, wardCount: 0, reportCount: 0, demoResetEnabled: false });
+        }
+      }
+    }
+    fetchHealth();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSelectWard = (ward: string) => {
     setSelectedWardName(ward);
@@ -61,17 +88,33 @@ export function DashboardClient() {
           <h1 className="text-2xl font-bold text-red-500">SafaiKavach</h1>
           <p className="text-sm text-slate-400">Hear the hazard before it hurts.</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={loadDemoData}
-            disabled={isResetting}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-sm transition-colors"
-          >
-            {isResetting ? "Resetting Demo..." : "Load Demo Data"}
-          </button>
+        <div className="flex items-center gap-3">
+          {healthStatus && (
+            <div className={`text-xs px-3 py-1.5 rounded-full border font-mono flex items-center gap-2 ${
+              healthStatus.reachable
+                ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
+                : "bg-red-950/60 border-red-800 text-red-300"
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${healthStatus.reachable ? "bg-emerald-400" : "bg-red-500 animate-pulse"}`} />
+              {healthStatus.reachable
+                ? `Database connected, ${healthStatus.wardCount} wards, ${healthStatus.reportCount} reports`
+                : "Database unreachable"}
+            </div>
+          )}
+
+          {healthStatus?.demoResetEnabled && (
+            <button
+              onClick={loadDemoData}
+              disabled={isResetting}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-xs font-medium transition-colors"
+            >
+              {isResetting ? "Resetting Demo..." : "Reset demo data"}
+            </button>
+          )}
+
           <button
             onClick={resetView}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-300"
             title="Reset local filter view"
           >
             Reset View
@@ -187,6 +230,7 @@ export function DashboardClient() {
                 onSelectReport={setSelectedReportId}
                 auditResult={auditResult}
                 selectedWardName={selectedWardName}
+                isActive={activeTab === "map"}
               />
 
               {auditResult && auditResult.status === "success" && (

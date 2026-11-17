@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GeneratePlanResult } from "@/lib/mitigation/service";
 import { humanizeCategory } from "@/lib/utils/format";
 
@@ -8,6 +8,28 @@ export function MitigationPlanPanel() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<GeneratePlanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch cached plan on mount via GET (does not trigger LLM generation)
+  useEffect(() => {
+    let active = true;
+    async function loadInitialPlan() {
+      try {
+        const res = await fetch("/api/mitigation-plan", { method: "GET" });
+        if (res.ok && active) {
+          const json: GeneratePlanResult = await res.json();
+          if (json.plan) {
+            setData(json);
+          }
+        }
+      } catch (err: unknown) {
+        console.warn("Failed to load initial cached mitigation plan:", err);
+      }
+    }
+    loadInitialPlan();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const fetchPlan = async (force: boolean = false) => {
     setLoading(true);
