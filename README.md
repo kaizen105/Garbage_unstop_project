@@ -285,6 +285,16 @@ All credentials must be supplied at runtime only:
 docker run -p 3000:3000 --env-file .env safaikavach:local
 ```
 
+## Future Work
+
+The following items are planned improvements and are not currently implemented.
+
+* Ward 192 highlight fix: Match the selected ward by externalId instead of ward_id alone in findWardFeature.ts, and key the highlight layer by externalId, so the two wards sharing ward_id 192 highlight correctly. Once this is done, remove the matching entry from Known Limitations.
+* Rate limiting for report submission: Limit /api/report and the submitReport server action per client. In-memory counters are unreliable on serverless hosting because each instance has separate memory, so a shared store (for example a Postgres counter table or a hosted Redis) is needed. Also consider basic abuse checks and an audit trail for submissions.
+* Detection backtest for Early Warning: Inject spikes of varied sizes into a copy of the data, run the existing anomaly score, and report detection rate, false alarm rate and detection delay. Current evidence only shows that planted spikes are detected, which tests the pipeline and does not show how the method performs on naturally occurring changes. The anomaly score uses only four weekly observations, so its baseline is a small sample.
+* Map marker clustering: Replace the loaded-report marker cap with clustering so the map can represent all rows.
+* Spatial index on report coordinates: Add a spatial index on report coordinates, or date partitioning, if the report table grows well beyond 10,000 rows. The current benchmark scans the report table sequentially, which is acceptable at this size.
+
 ## Known Limitations
 
 * Synthetic base data: All baseline incident records are synthetic demo data, except for live reports submitted during an active session.
