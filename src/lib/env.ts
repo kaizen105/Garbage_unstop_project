@@ -20,6 +20,8 @@ const envSchema = z.object({
   LLM_MODEL_AUDIT: z.string().default("openrouter/free"),
   NEXT_PUBLIC_MAPBOX_TOKEN: z.string().optional(),
   NEXT_PUBLIC_MAP_PROVIDER: z.enum(["leaflet", "mapbox"]).default("leaflet"),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(600),
 }).superRefine((data, ctx) => {
   if (data.LLM_PROVIDER !== "mock") {
     if (!data.LLM_API_KEY) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { transcribeAudio, GnaniError } from "../../../lib/gnani/prisma";
 import { createReportRecord } from "../../../lib/reports/service";
+import { checkRateLimit, extractClientIp } from "@/lib/rateLimit";
 import { z } from "zod";
 import { TraceStage, timeStage } from "../../../lib/trace";
 
@@ -14,6 +15,24 @@ export { getActionRequired } from "@/lib/dispatch";
 
 export async function POST(request: Request) {
   try {
+    const clientIp = extractClientIp(request.headers);
+    const rateLimit = await checkRateLimit(clientIp);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "RATE_LIMITED",
+          message: `Rate limit exceeded. Please wait ${rateLimit.retryAfterSeconds} seconds before submitting another report.`,
+          retryAfter: rateLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": rateLimit.retryAfterSeconds.toString(),
+          },
+        }
+      );
+    }
+
     const contentType = request.headers.get("content-type") || "";
 
     let text = "";

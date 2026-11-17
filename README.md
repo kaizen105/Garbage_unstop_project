@@ -50,11 +50,12 @@ flowchart TD
 
 ### Write Pipeline Stages
 
-1. Report Intake: Spoken audio is transcribed via Gnani STT (or mock fallback) through `/api/report`. Text reports submit through the `submitReport` Server Action.
-2. Server Extraction: The server parses transcripts or text using an LLM or keyword fallback into a hazard category, severity score (1 to 10), and location text.
-3. Coordinates and Spatial Tagging: Coordinates are resolved from browser GPS or Delhi landmark gazetteer matching. The server executes a PostGIS `ST_Covers` query over 290 MultiPolygon ward boundaries indexed with GiST in Neon Postgres.
-4. Deterministic Dispatch: Hazard category and severity determine the action required (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`). The client cannot choose or override this value.
-5. Storage: Reports are written to the `Report` table in Postgres using Prisma.
+1. Rate Limiting: Incoming requests to `submitReport` and `/api/report` are checked against a PostgreSQL-backed fixed-window rate limiter by client IP before executing STT, LLM extraction, or database writes.
+2. Report Intake: Spoken audio is transcribed via Gnani STT (or mock fallback) through `/api/report`. Text reports submit through the `submitReport` Server Action.
+3. Server Extraction: The server parses transcripts or text using an LLM or keyword fallback into a hazard category, severity score (1 to 10), and location text.
+4. Coordinates and Spatial Tagging: Coordinates are resolved from browser GPS or Delhi landmark gazetteer matching. The server executes a PostGIS `ST_Covers` query over 290 MultiPolygon ward boundaries indexed with GiST in Neon Postgres.
+5. Deterministic Dispatch: Hazard category and severity determine the action required (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`). The client cannot choose or override this value.
+6. Storage: Reports are written to the `Report` table in Postgres using Prisma.
 
 ### SQL Read Paths
 
@@ -84,7 +85,7 @@ The dashboard provides real-time monitoring and dispatch oversight:
 
 * Dispatch Badges: Visual status badges indicating required response actions (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`).
 * FlyTo Animation: Selecting an incident triggers smooth map animation (`flyTo`) centering the viewport on the incident coordinates.
-* Selected Ward Highlight: Clicking a report highlights the polygon boundary of its assigned ward in cyan.
+* Selected Ward Highlight: Clicking a report highlights the polygon boundary of its assigned ward in cyan, matched via unique composite identifiers (`<ward_id>-<NAME-SLUGGED>`) so colliding numeric ward IDs like Ward 192 resolve and render correctly.
 * Health Status Pill: Queries `/api/health` to display database connectivity, loaded ward count (290), total report count, and demo reset status.
 * Reset Demo Data Button: Displayed in the UI only when `ENABLE_DEMO_RESET` is `"true"`. Deletes only synthetic demo rows with ID prefix `HZ-` and reseeds the 60 baseline demo records. It preserves `SYN-` records.
 * OpenStreetMap Dark Filter: Renders base map tiles with a custom CSS inversion and hue rotation filter (`leaflet-tile-dark`) for readability in low-light environments.
@@ -209,6 +210,8 @@ Environment variables configured in `.env.example`:
 * `GNANI_API_KEY`: API key for Gnani speech transcription service. Optional; falls back to mock if empty.
 * `GNANI_STT_URL`: URL for Gnani speech-to-text service.
 * `NEXT_PUBLIC_MAP_PROVIDER`: Map tile provider (`leaflet` or `mapbox`, defaults to `leaflet`).
+* `RATE_LIMIT_MAX`: Maximum allowed report submissions per IP per window (defaults to `10`).
+* `RATE_LIMIT_WINDOW_SECONDS`: Duration of the rate limit window in seconds (defaults to `600`, or 10 minutes).
 
 ### Database Setup and Seeding
 
@@ -256,7 +259,7 @@ Warning: `npm run gen:10k` writes directly to the database connection specified 
 The project maintains two distinct test setups:
 
 ```bash
-# Run unit tests (83 tests across 20 suites, completely offline, no DB or network access)
+# Run unit tests (97 tests across 21 suites, completely offline, no DB or network access)
 npm test
 
 # Run integration tests (validates PostGIS ST_Covers queries and SQL aggregation against live Postgres)
@@ -289,8 +292,7 @@ docker run -p 3000:3000 --env-file .env safaikavach:local
 
 The following items are planned improvements and are not currently implemented.
 
-* Ward 192 highlight fix: Match the selected ward by externalId instead of ward_id alone in findWardFeature.ts, and key the highlight layer by externalId, so the two wards sharing ward_id 192 highlight correctly. Once this is done, remove the matching entry from Known Limitations.
-* Rate limiting for report submission: Limit /api/report and the submitReport server action per client. In-memory counters are unreliable on serverless hosting because each instance has separate memory, so a shared store (for example a Postgres counter table or a hosted Redis) is needed. Also consider basic abuse checks and an audit trail for submissions.
+* Authentication and abuse detection: Add API authentication, submission audit logging, and automated abuse detection beyond basic per-IP limits.
 * Detection backtest for Early Warning: Inject spikes of varied sizes into a copy of the data, run the existing anomaly score, and report detection rate, false alarm rate and detection delay. Current evidence only shows that planted spikes are detected, which tests the pipeline and does not show how the method performs on naturally occurring changes. The anomaly score uses only four weekly observations, so its baseline is a small sample.
 * Map marker clustering: Replace the loaded-report marker cap with clustering so the map can represent all rows.
 * Spatial index on report coordinates: Add a spatial index on report coordinates, or date partitioning, if the report table grows well beyond 10,000 rows. The current benchmark scans the report table sequentially, which is acceptable at this size.
@@ -299,12 +301,11 @@ The following items are planned improvements and are not currently implemented.
 
 * Synthetic base data: All baseline incident records are synthetic demo data, except for live reports submitted during an active session.
 * Pre-2022 ward boundaries: Ward polygons originate from DataMeet GeoJSON and predate the 2022 MCD 250-ward delimitation. Certain polygons feature boundary overlaps (for example, KHANPUR and TIGRI).
-* Ward highlight collision: In `findWardFeature.ts` and `HazardMap.tsx`, ward lookup and React keys use `ward_id` alone. Because two wards share `ward_id` "192", selecting an incident in `Ward 192` resolves to index 82 (`GREATER KAILASH-I`) and highlights its boundary instead.
 * OpenStreetMap tile usage: The public OpenStreetMap tile server is intended for development and low-volume evaluation only. Production deployments should use a dedicated tile provider.
 * Unpinned LLM router: The default extraction and audit model slug `openrouter/free` dynamically routes requests to available free models, which may vary in output formatting reliability.
 * Biohazard data source: Biohazard proportions were derived from municipal animal carcass removal requests rather than clinical or hazardous medical waste filings.
 * Loaded report map limit: The live map displays markers only for reports currently loaded into client view state (capped at the latest 300 reports), rather than all 10,000 database rows.
-* Unauthenticated write actions: The `submitReport` server action and `/api/report` endpoint currently lack authentication and per-IP rate limiting.
+* Rate limiting behavior: Report submission in `submitReport` and `/api/report` enforces per-IP fixed-window rate limiting backed by PostgreSQL. The limiter fails open if database connectivity fails so that report intake remains available, and per-IP tracking does not prevent distributed abuse. The `/api/mitigation-plan` endpoint maintains a separate in-memory limiter scoped per server instance.
 
 ## Project Structure
 

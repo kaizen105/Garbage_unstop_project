@@ -2,20 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { HazardCategory, ActionRequired, ReportStatus } from "@prisma/client";
 import { getActionRequired } from "../src/lib/dispatch";
-import { slugWardName } from "../src/lib/spatial/wards";
+import { deriveWardExternalId } from "../src/lib/spatial/wards";
 import { TRANSCRIPT_TEMPLATES } from "./data/transcript_templates";
 import { samplePointInPolygon, pickWeightedIndex, createPseudoRandom } from "./generator_utils";
 import type { FeatureCollection, Feature, Polygon, MultiPolygon } from "geojson";
 
-export function deriveWardExternalId(
-  feature: Feature<Polygon | MultiPolygon> | { properties?: { ward_id?: unknown; ward_name?: unknown; WARD_NAME?: unknown } | null }
-): string {
-  const props = feature.properties;
-  const wid = String(props?.ward_id ?? "").trim();
-  const wname = String(props?.ward_name ?? props?.WARD_NAME ?? "").trim();
-  const slugName = slugWardName(wname);
-  return `${wid}-${slugName}`;
-}
+export { deriveWardExternalId };
 
 export function verifyRecordsWardMapping(
   records: Array<{ id: string; wardId: string | null }>,

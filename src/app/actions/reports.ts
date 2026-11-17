@@ -2,8 +2,10 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { createReportRecord } from "@/lib/reports/service";
+import { checkRateLimit, extractClientIp } from "@/lib/rateLimit";
 import type { Report as ClientReport } from "@/lib/store/reports";
 import type { PipelineTrace } from "@/lib/trace";
 import { seedReports } from "@/data/seed_reports";
@@ -31,6 +33,16 @@ export type ServerActionResult<T> =
  */
 export async function submitReport(rawInput: unknown): Promise<ServerActionResult<{ report: ClientReport; trace: PipelineTrace }>> {
   try {
+    const headerList = await headers();
+    const clientIp = extractClientIp(headerList);
+    const rateLimit = await checkRateLimit(clientIp);
+    if (!rateLimit.allowed) {
+      return {
+        ok: false,
+        error: `Rate limit exceeded. Please wait ${rateLimit.retryAfterSeconds} seconds before submitting another report.`,
+      };
+    }
+
     const parseResult = SubmitReportInputSchema.safeParse(rawInput);
     if (!parseResult.success) {
       const firstIssue = parseResult.error.issues[0]?.message ?? "Invalid report input";

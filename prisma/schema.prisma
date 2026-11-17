@@ -107,3 +107,14 @@ model MitigationPlan {
   planJson          Json
   createdAt         DateTime @default(now())
 }
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart], name: "key_windowStart")
+  @@index([windowStart])
+}

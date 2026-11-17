@@ -9,6 +9,16 @@ export function slugWardName(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+export function deriveWardExternalId(
+  feature: Feature<Polygon | MultiPolygon> | { properties?: { ward_id?: unknown; ward_name?: unknown; WARD_NAME?: unknown } | null }
+): string {
+  const props = feature.properties;
+  const wid = String(props?.ward_id ?? "").trim();
+  const wname = String(props?.ward_name ?? props?.WARD_NAME ?? "").trim();
+  const slugName = slugWardName(wname);
+  return `${wid}-${slugName}`;
+}
+
 export type WardTag = 
   | { status: "matched"; ward_id: string; ward_name: string; external_id: string }
   | { status: "unmapped" }

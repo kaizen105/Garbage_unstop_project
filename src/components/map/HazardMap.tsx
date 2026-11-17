@@ -273,7 +273,7 @@ export function HazardMap({
 
         {wardFeature && selectedWardTag?.status === "matched" && (
           <GeoJSON 
-            key={`highlight-${selectedWardTag.ward_id}`}
+            key={`highlight-${selectedWardTag.external_id || `${selectedWardTag.ward_id}-${selectedWardTag.ward_name || ""}`}`}
             data={wardFeature as GeoJsonObject} 
             style={{ color: "#38bdf8", weight: 3, fillColor: "#38bdf8", fillOpacity: 0.25 }}
           />
