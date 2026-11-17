@@ -15,3 +15,14 @@ export function getDispatchBadge(action: string): DispatchBadge {
       return { label: "UNKNOWN", tone: "neutral" };
   }
 }
+
+export function getActionRequired(category: string, severity: number): "dispatch_hazmat_bypass_standard" | "bypass_standard" | "routine_collection" {
+  const hazmat = ["biohazard_medical", "chemical", "electrical_hazard"];
+  if (hazmat.includes(category) && severity >= 6) {
+    return "dispatch_hazmat_bypass_standard";
+  }
+  if (severity >= 7) {
+    return "bypass_standard";
+  }
+  return "routine_collection";
+}

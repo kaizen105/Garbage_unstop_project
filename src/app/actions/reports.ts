@@ -60,6 +60,21 @@ export async function submitReport(rawInput: unknown): Promise<ServerActionResul
  * Deletes ONLY rows where isSynthetic = true and reseeds the 60 seed rows inside a single transaction.
  * Real reports (isSynthetic = false) are never deleted.
  */
+
+/**
+ * Pure function returning Prisma delete filter for synthetic demo reports.
+ * Deletes only rows where isSynthetic is true and id starts with 'HZ-'.
+ * Protects 10k synthetic batches ('SYN-') and live reports from deletion.
+ */
+export function buildDemoResetDeleteWhere() {
+  return {
+    isSynthetic: true,
+    id: {
+      startsWith: "HZ-",
+    },
+  };
+}
+
 export async function resetSyntheticData(): Promise<ServerActionResult<{ count: number }>> {
   try {
     if (process.env.ENABLE_DEMO_RESET !== "true") {
@@ -76,9 +91,9 @@ export async function resetSyntheticData(): Promise<ServerActionResult<{ count: 
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Delete ONLY synthetic reports
+      // 1. Delete ONLY synthetic demo reports (HZ- prefix)
       await tx.report.deleteMany({
-        where: { isSynthetic: true },
+        where: buildDemoResetDeleteWhere(),
       });
 
       // 2. Reseed the 60 seed reports

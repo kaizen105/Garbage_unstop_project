@@ -10,16 +10,7 @@ export const JsonBodySchema = z.object({
   lng: z.number().optional(),
 });
 
-export function getActionRequired(category: string, severity: number) {
-  const hazmat = ["biohazard_medical", "chemical", "electrical_hazard"];
-  if (hazmat.includes(category) && severity >= 6) {
-    return "dispatch_hazmat_bypass_standard";
-  }
-  if (severity >= 7) {
-    return "bypass_standard";
-  }
-  return "routine_collection";
-}
+export { getActionRequired } from "@/lib/dispatch";
 
 export async function POST(request: Request) {
   try {
