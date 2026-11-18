@@ -1,8 +1,28 @@
 import { NextResponse } from "next/server";
 import { transcribeAudio, GnaniError } from "@/lib/gnani/prisma";
+import { checkRateLimit, extractClientIp } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   try {
+    const clientIp = extractClientIp(request.headers);
+    // Rate limit check: fails open on database error
+    const rateLimit = await checkRateLimit(`transcribe:${clientIp}`);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "RATE_LIMITED",
+          message: `Rate limit exceeded. Please wait ${rateLimit.retryAfterSeconds} seconds before submitting another request.`,
+          retryAfter: rateLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": rateLimit.retryAfterSeconds.toString(),
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
     const audioFile = formData.get("audio_file");
     const languageCode = formData.get("language_code")?.toString() || "hi-IN";
