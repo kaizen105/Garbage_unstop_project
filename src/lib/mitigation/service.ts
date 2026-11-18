@@ -13,12 +13,13 @@ export interface GeneratePlanResult {
   aggregates?: WeeklyAggregates;
   generatedAt: string;
   cached: boolean;
+  stale?: boolean;
   includesSynthetic: boolean;
   model: string;
   error?: string;
 }
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+export const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
 export async function generateWeeklyPlan(options?: { force?: boolean }): Promise<GeneratePlanResult> {
   const now = new Date();
@@ -96,7 +97,32 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
 }
 
 
-export async function getLatestCachedPlan(): Promise<GeneratePlanResult> {
+export async function getFreshCachedPlan(ttlMs: number = CACHE_TTL_MS): Promise<GeneratePlanResult | null> {
+  const latest = await prisma.mitigationPlan.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!latest) {
+    return null;
+  }
+
+  const now = new Date();
+  if (now.getTime() - latest.createdAt.getTime() < ttlMs) {
+    return {
+      status: "ok",
+      plan: latest.planJson as unknown as GroundedMitigationPlan,
+      aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
+      generatedAt: latest.createdAt.toISOString(),
+      cached: true,
+      includesSynthetic: latest.includesSynthetic,
+      model: latest.model,
+    };
+  }
+
+  return null;
+}
+
+export async function getLatestCachedPlan(options?: { stale?: boolean }): Promise<GeneratePlanResult> {
   const latest = await prisma.mitigationPlan.findFirst({
     orderBy: { createdAt: "desc" },
   });
@@ -117,6 +143,7 @@ export async function getLatestCachedPlan(): Promise<GeneratePlanResult> {
     aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
     generatedAt: latest.createdAt.toISOString(),
     cached: true,
+    ...(options?.stale ? { stale: true } : {}),
     includesSynthetic: latest.includesSynthetic,
     model: latest.model,
   };

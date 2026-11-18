@@ -74,10 +74,13 @@ export function extractClientIp(headerGetter: { get: (name: string) => string | 
  * Server function: performs atomic upsert increment on RateLimit table.
  * Fails open if database operation throws.
  */
-export async function checkRateLimit(clientKey: string): Promise<RateLimitDecision> {
+export async function checkRateLimit(
+  clientKey: string,
+  options?: { limit?: number; windowSeconds?: number }
+): Promise<RateLimitDecision> {
   const env = getEnv();
-  const limit = env.RATE_LIMIT_MAX;
-  const windowSeconds = env.RATE_LIMIT_WINDOW_SECONDS;
+  const limit = options?.limit ?? env.RATE_LIMIT_MAX;
+  const windowSeconds = options?.windowSeconds ?? env.RATE_LIMIT_WINDOW_SECONDS;
   const nowMs = Date.now();
   const windowStart = computeWindowStart(nowMs, windowSeconds);
 
