@@ -16,6 +16,7 @@ export interface HotspotRanking {
   this_week: number;
   pct_change: number;
   anomaly_score: number;
+  score: number;
   sparkline: [number, number, number, number]; // [W-3, W-2, W-1, W0]
   dominant_category: string;
   likely_cause: string;
@@ -191,6 +192,7 @@ export function rankHotspots(
       this_week: score.this_week,
       pct_change: score.pct_change,
       anomaly_score: score.anomaly_score,
+      score: score.anomaly_score,
       sparkline: [b.counts[3], b.counts[2], b.counts[1], b.counts[0]],
       dominant_category: domCat,
       likely_cause: details.cause,

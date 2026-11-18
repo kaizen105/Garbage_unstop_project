@@ -60,7 +60,7 @@ flowchart TD
 ### SQL Read Paths
 
 * `/api/stats`: Computes total report count, high severity count (severity >= 7), average severity, hazmat action count, and estimated prevented cost in a single SQL query directly against the `Report` table.
-* `/api/early-warning`: Aggregates reports over a 28 day window into 4 weekly buckets (W-3, W-2, W-1, W0), grouped in SQL by `COALESCE(w.name, r.rawLocation)` and `hazardCategory`. Hotspots are ranked by anomaly score `(w0 - mean) / std` and linear projection slope. Also returns citywide weekly category totals and per-ward W0 counts.
+* `/api/early-warning`: Aggregates reports over a 28 day window into 4 weekly buckets (W-3, W-2, W-1, W0), grouped in SQL by `COALESCE(w.name, r.rawLocation)` and `hazardCategory`. Hotspots are ranked by anomaly score `(w0 - mean) / std` and linear trend slope to provide a trend-based estimate. Also returns citywide weekly category totals and per-ward W0 counts.
 * `/api/reports`: Returns a cursor-paged list of reports with query parameters `limit` (default 50, maximum 200) and optional `cursor` (report ID). Returns `{ reports, nextCursor }`.
 * `/api/reports/[id]`: Returns a single report by ID (`{ report }`), or 404 if not found.
 * `/api/audit`: When called with an empty body (`{}`), executes a bounded SQL anomaly query against the database (`findLargestAnomalyFromDb`) to locate the largest spatial cluster in recent reports and run DBSCAN clustering without loading reports into client state. If an explicit reports array is provided in the body, it accepts up to 500 reports.
@@ -91,6 +91,32 @@ The dashboard provides real-time monitoring and dispatch oversight:
 * OpenStreetMap Dark Filter: Renders base map tiles with a custom CSS inversion and hue rotation filter (`leaflet-tile-dark`) for readability in low-light environments.
 * Marker Cap: Renders map markers for up to the latest 300 loaded reports with an on-screen note to ensure map interaction remains smooth.
 * Load More Paging: The reports list loads in batches of 50 using cursor-based pagination via a "Load more" button.
+
+## Estimated Prevented Cost
+
+Estimated prevented cost is computed only for reports with non-routine dispatch actions (`actionRequired` is not `routine_collection`). Routine collection reports evaluate to 0.
+
+Formula:
+
+$$ \text{Prevented Cost} = \text{Base Cost}(\text{hazardCategory}) \times \frac{\text{severityLevel}}{10} $$
+
+### Base Cost Constants
+
+| Hazard Category | Placeholder Cost (INR) |
+|---|---|
+| `chemical` | 120,000 |
+| `biohazard_medical` | 85,000 |
+| `electrical_hazard` | 60,000 |
+| `construction_debris` | 40,000 |
+| `general_overflow` | 5,000 |
+| `unknown` (fallback) | 10,000 |
+
+### Stated Assumptions
+
+* Every non-routine report is assumed to avoid one incident.
+* Constants are placeholders with no source and do not represent measured real-world savings.
+* The header total sums all rows in the database, including synthetic rows, with no time window.
+* Detour cost is not included in the header figure.
 
 ## Synthetic Dataset
 

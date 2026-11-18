@@ -109,8 +109,9 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
           <div className="text-2xl font-bold text-white">{wardsOnWatch}</div>
         </div>
         <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-          <div className="text-slate-400 text-sm">Projected Hotspot Hazards (Next Week)</div>
-          <div className="text-2xl font-bold text-orange-400">{projectedHazards}</div>
+          <div className="text-slate-400 text-sm">Trend-based Incident Estimate (Next Week)</div>
+          <div className="text-xs text-slate-500 mt-0.5">Sum of each flagged ward&apos;s 4-week linear trend. Not a probability.</div>
+          <div className="text-2xl font-bold text-orange-400 mt-1">{projectedHazards}</div>
         </div>
         <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
           <div className="text-slate-400 text-sm">Highest Risk Ward</div>
@@ -122,6 +123,8 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
         <h2 className="text-xl font-bold text-slate-200 border-b border-slate-700 pb-2">Ranked Hotspots</h2>
         {hotspots.map((h, idx) => {
           const maxVal = Math.max(...h.sparkline, 1);
+          const wPrev = h.sparkline[2];
+          const wCurr = h.sparkline[3];
           return (
             <div key={h.ward} className="bg-slate-800 rounded-lg p-4 flex gap-6 items-center border border-slate-700 hover:border-slate-500 cursor-pointer transition-colors" onClick={() => onSelectWard(h.ward)}>
               <div className="text-slate-500 font-bold w-6">#{idx + 1}</div>
@@ -132,10 +135,12 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
                   {h.risk.toUpperCase()}
                 </div>
               </div>
-              <div className="w-32">
+              <div className="w-44">
+                <div className="text-xs text-slate-400 mb-0.5">This week (observed)</div>
                 <div className="text-2xl font-bold">{h.this_week}</div>
+                <div className="text-xs text-slate-400 mt-1.5 mb-0.5">Change vs last week</div>
                 <div className={`text-sm ${h.pct_change >= 0 ? "text-red-400" : "text-green-400"}`}>
-                  {h.pct_change > 0 ? "+" : ""}{h.pct_change.toFixed(0)}% this week
+                  {h.pct_change > 0 ? "+" : ""}{h.pct_change.toFixed(0)}% ({wPrev} to {wCurr})
                 </div>
               </div>
               <div className="flex flex-col w-32 items-center">
@@ -147,14 +152,28 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
                 <div className="flex gap-1 w-full justify-between text-[10px] text-slate-500 mt-1">
                   <span>W-3</span><span>W-2</span><span>W-1</span><span>W0</span>
                 </div>
+                <div className="text-[10px] text-slate-500 text-center mt-1">
+                  Baseline: 3 prior weeks
+                </div>
+              </div>
+              <div className="w-28 text-center">
+                <div
+                  title="z-score of this week against the previous 3 weeks. Not a probability."
+                  className="text-slate-400 text-xs font-semibold cursor-help border-b border-dashed border-slate-600 inline-block mb-1"
+                >
+                  Anomaly score
+                </div>
+                <div className="text-2xl font-bold text-yellow-400">
+                  {(h.score ?? h.anomaly_score).toFixed(1)}
+                </div>
               </div>
               <div className="flex-1 text-sm text-slate-300 grid grid-cols-2 gap-2">
                 <div><span className="text-slate-500">Dominant:</span> <br/>{humanizeCategory(h.dominant_category)}</div>
                 <div><span className="text-slate-500">Likely cause:</span> <br/>{h.likely_cause}</div>
                 <div className="col-span-2"><span className="text-slate-500">Suggested Dept:</span> {h.suggested_department}</div>
               </div>
-              <div className="w-24 text-center">
-                <div className="text-slate-500 text-xs uppercase font-bold tracking-wider mb-1">Proj. (W+1)</div>
+              <div className="w-32 text-center">
+                <div className="text-slate-400 text-xs uppercase font-bold tracking-wider mb-1">Trend estimate (next week)</div>
                 <div className="text-3xl font-bold text-purple-400">{h.projection}</div>
               </div>
             </div>

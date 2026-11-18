@@ -49,7 +49,7 @@ export function DashboardClient() {
     ? stats.average_severity.toFixed(1)
     : (total > 0 ? (reports.reduce((a, b) => a + b.severity_level, 0) / total).toFixed(1) : "0.0");
   const hazmat = stats ? stats.hazmat_count : reports.filter((r) => r.action_required.includes("hazmat")).length;
-  const totalNetInr = stats ? stats.estimated_prevented : reports.reduce((acc, r) => acc + estimateImpact(r).net_inr, 0);
+  const totalNetInr = stats ? stats.estimated_prevented : reports.reduce((acc, r) => acc + estimateImpact(r).prevented_inr, 0);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -287,10 +287,10 @@ export function DashboardClient() {
                 Hazmat: <span className="font-bold text-orange-400">{hazmat}</span>
               </div>
               <div
-                title="Estimated (illustrative assumptions)"
+                title="Illustrative estimate. Each non-routine report is assumed to avoid one incident of a fixed cost per category, scaled by severity/10. Not measured savings. Based on synthetic data."
                 className="cursor-help border-b border-dashed border-slate-500"
               >
-                Est. prevented: <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
+                Est. prevented (illustrative): <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
               </div>
 
               <button

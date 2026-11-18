@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { buildPreventedCostSql } from "@/lib/finance/preventedCostSql";
 
 export interface StatsResponse {
   total: number;
@@ -29,18 +30,7 @@ export async function GET() {
         COALESCE(AVG("severityLevel"), 0)::float8 AS average_severity,
         COUNT(CASE WHEN "actionRequired" = 'dispatch_hazmat_bypass_standard' THEN 1 END)::int AS hazmat_count,
         COALESCE(SUM(
-          CASE
-            WHEN "actionRequired" <> 'routine_collection' THEN
-              CASE "hazardCategory"
-                WHEN 'biohazard_medical' THEN 85000 * ("severityLevel"::float8 / 10.0)
-                WHEN 'chemical' THEN 120000 * ("severityLevel"::float8 / 10.0)
-                WHEN 'electrical_hazard' THEN 60000 * ("severityLevel"::float8 / 10.0)
-                WHEN 'construction_debris' THEN 40000 * ("severityLevel"::float8 / 10.0)
-                WHEN 'general_overflow' THEN 5000 * ("severityLevel"::float8 / 10.0)
-                ELSE 10000 * ("severityLevel"::float8 / 10.0)
-              END
-            ELSE 0
-          END
+          ${buildPreventedCostSql()}
         ), 0)::bigint AS estimated_prevented
       FROM "Report"
     `);
