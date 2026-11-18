@@ -4,11 +4,12 @@ import { createReportRecord } from "../../../lib/reports/service";
 import { checkRateLimit, extractClientIp } from "@/lib/rateLimit";
 import { z } from "zod";
 import { TraceStage, timeStage } from "../../../lib/trace";
+import { LatitudeSchema, LongitudeSchema } from "@/lib/validation/schemas";
 
 export const JsonBodySchema = z.object({
-  text: z.string().min(1).max(2000),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
+  text: z.string().trim().min(1).max(2000),
+  lat: LatitudeSchema.optional(),
+  lng: LongitudeSchema.optional(),
 });
 
 export { getActionRequired } from "@/lib/dispatch";
@@ -43,9 +44,32 @@ export async function POST(request: Request) {
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
+      const rawLat = formData.get("lat");
+      const rawLng = formData.get("lng");
+
+      if (rawLat !== null && rawLat !== undefined && rawLat !== "") {
+        const parsedLat = parseFloat(rawLat as string);
+        if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+          return NextResponse.json(
+            { error: "VALIDATION_ERROR", message: "Invalid latitude" },
+            { status: 400 }
+          );
+        }
+        lat = parsedLat;
+      }
+
+      if (rawLng !== null && rawLng !== undefined && rawLng !== "") {
+        const parsedLng = parseFloat(rawLng as string);
+        if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+          return NextResponse.json(
+            { error: "VALIDATION_ERROR", message: "Invalid longitude" },
+            { status: 400 }
+          );
+        }
+        lng = parsedLng;
+      }
+
       const audioFile = formData.get("audio");
-      lat = formData.get("lat") ? parseFloat(formData.get("lat") as string) : undefined;
-      lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : undefined;
       const languageCode = formData.get("language_code")?.toString() || "hi-IN";
 
       if (!audioFile || !(audioFile instanceof Blob)) {

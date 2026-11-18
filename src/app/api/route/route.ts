@@ -9,11 +9,34 @@ const RouteSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const json = await request.json();
-    const { lat, lng } = RouteSchema.parse(json);
+    let json: unknown;
+    try {
+      json = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Invalid payload" },
+        { status: 400 }
+      );
+    }
+
+    const parseResult = RouteSchema.safeParse(json);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Invalid payload" },
+        { status: 400 }
+      );
+    }
+
+    const { lat, lng } = parseResult.data;
     const routes = await fetchRoute({ lat, lng });
     return NextResponse.json(routes);
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Invalid payload" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: "INTERNAL_ERROR" }, { status: 500 });
   }
 }

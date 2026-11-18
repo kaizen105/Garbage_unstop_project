@@ -8,6 +8,7 @@ import { resolveCoordinates } from "@/lib/spatial/locate";
 import { tagWardDb } from "@/lib/spatial/wardsDb";
 import { getActionRequired } from "@/app/api/report/route";
 import * as crypto from "crypto";
+import { z } from "zod";
 import { PipelineTrace, TraceStage, timeStage } from "@/lib/trace";
 
 /**
@@ -17,26 +18,24 @@ export function generateReportId(): string {
   return "HZ-" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
-export interface ListReportsOptions {
-  limit?: number;
-  cursor?: string;
-}
+export const ListReportsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
+});
+export type ListReportsOptions = z.infer<typeof ListReportsQuerySchema>;
 
 /**
  * Server-only function to list reports with limit and cursor,
  * ordered by createdAt desc, id desc. Default limit 50, max 200.
  */
 export async function listReports(options?: ListReportsOptions): Promise<ClientReport[]> {
-  const defaultLimit = 50;
-  const maxLimit = 200;
-  const limit = options?.limit !== undefined
-    ? Math.min(Math.max(1, options.limit), maxLimit)
-    : defaultLimit;
+  const parsed = ListReportsQuerySchema.safeParse(options ?? {});
+  const { limit, cursor } = parsed.success ? parsed.data : { limit: 50, cursor: undefined };
 
   const rows = await prisma.report.findMany({
     take: limit,
-    skip: options?.cursor ? 1 : 0,
-    cursor: options?.cursor ? { id: options.cursor } : undefined,
+    skip: cursor ? 1 : 0,
+    cursor: cursor ? { id: cursor } : undefined,
     orderBy: [
       { createdAt: "desc" },
       { id: "desc" },

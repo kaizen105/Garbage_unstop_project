@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error("POST /api/mitigation-plan error:", error);
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -49,7 +49,7 @@ export async function GET() {
   } catch (error: unknown) {
     console.error("GET /api/mitigation-plan error:", error);
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

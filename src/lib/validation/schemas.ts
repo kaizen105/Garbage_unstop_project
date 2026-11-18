@@ -31,14 +31,17 @@ export const GnaniTranscriptSchema = z.object({
 });
 export type GnaniTranscript = z.infer<typeof GnaniTranscriptSchema>;
 
+export const LatitudeSchema = z.number().min(-90).max(90);
+export const LongitudeSchema = z.number().min(-180).max(180);
+
 export const HazardReportSchema = z.object({
   report_id: z.string(),
   hazard_category: HazardCategorySchema,
   severity_level: z.number().int().min(1).max(10),
   raw_location: z.string(),
   coordinates: z.object({
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
+    lat: LatitudeSchema,
+    lng: LongitudeSchema,
   }).nullable(),
   action_required: z.enum(["dispatch_hazmat_bypass_standard", "bypass_standard", "routine_collection"]),
 });
