@@ -1,374 +1,476 @@
 # SafaiKavach
 
-Voice-first municipal hazard intake, PostGIS ward dispatch, and grounded weekly mitigation planning for Delhi sanitation fleets.
+SafaiKavach is an intake and dispatch platform for road hazards including biomedical waste, loose electrical wiring, chemical leaks, demolition debris, and open garbage heaps. It provides voice and text intake, PostGIS municipal ward tagging, deterministic dispatch routing, statistical early warning anomaly detection, and weekly mitigation plan generation. All data is synthetic.
 
-Live deployment: https://garbage-unstop-project.vercel.app/
+Live deployment: https://garbage-unstop-project.vercel.app
 
-SafaiKavach gives municipal staff and citizens a way to report road hazards (biomedical waste, loose electrical wiring, chemical leaks, demolition debris, and open garbage heaps) by voice or text. Reports are validated on the server, tagged to Delhi municipal wards through spatial PostGIS queries, routed to field teams using deterministic rules, and aggregated weekly into structured mitigation plans grounded against verified SQL totals.
+## 2. Architecture
 
-## Architecture
-
-### Data Flow
+The system consists of a Next.js web application interfacing with Neon PostgreSQL (with PostGIS extensions), external speech-to-text services, and LLM inference providers.
 
 ```mermaid
 flowchart TD
-    subgraph Intake["Intake and Write Pipeline"]
-        A["Citizen or Driver Input: Voice Audio or Text"] --> B{"Submission Path"}
-        B -->|"Audio Multipart"| C["/api/report Endpoint"]
-        B -->|"Text and Geolocation"| D["Server Action: submitReport"]
-        C --> E["Gnani Speech-to-Text"]
-        E --> F["LLM or Mock Hazard Extraction"]
-        D --> F
-        F --> G["Zod Server Schema Validation"]
-        G --> H["Spatial Landmark Gazetteer"]
-        H --> I["PostGIS tagWardDb: ST_Covers over 290 Wards"]
-        I --> J["Deterministic Rule Dispatch: getActionRequired"]
-        J --> K[("Neon Postgres: Report and Ward Tables")]
+    subgraph Client["Client Browser"]
+        UI["React 19 Dashboard and Leaflet Map"]
+        AudioIntake["Voice Recorder: MediaRecorder Audio Blob"]
+        TextIntake["Text Form: Hazard Description and GPS"]
     end
 
-    subgraph ReadPaths["SQL Read and Query Paths"]
-        K --> Q["GET /api/stats: Aggregate Totals and Cost"]
-        K --> R["GET /api/early-warning: 28-Day SQL Buckets by Ward"]
-        K --> S["GET /api/reports: Cursor Paged List"]
-        K --> T["GET /api/reports/:id: Single Report by ID"]
-        K --> U["POST /api/audit: Bounded SQL Anomaly Cluster"]
-        K --> M["Weekly Aggregates Query: 7-Day SQL GROUP BY"]
+    subgraph Server["Next.js Server: Node.js"]
+        ActionSubmit["Server Action: submitReport"]
+        RouteReport["POST /api/report"]
+        RouteEarlyWarning["GET /api/early-warning"]
+        RouteMitigation["POST /api/mitigation-plan"]
+        RouteAudit["POST /api/audit"]
+        RouteStats["GET /api/stats"]
+        RateLimiter["checkRateLimit: PostgreSQL Fixed-Window"]
+        MitigationLock["tryAcquireMitigationLock: 60s Row Lock"]
+        DispatchRules["Deterministic getActionRequired"]
+        Grounding["groundPlan: Anti-Hallucination Verification"]
     end
 
-    subgraph Planning["Mitigation Planning"]
-        M --> N["LangChain ChatOpenAI: Structured Output"]
-        N --> O["groundPlan: Anti-Hallucination Verification"]
-        O --> P[("MitigationPlan Table: Cached Plan")]
+    subgraph External["External APIs"]
+        GnaniSTT["Gnani Speech-to-Text API"]
+        LLMProvider["OpenRouter or Mock LLM Provider"]
     end
 
-    Q --> L["Dashboard: React 19 UI and Leaflet Map"]
-    R --> L
-    S --> L
-    U --> L
-    P --> L
+    subgraph Database["Neon PostgreSQL with PostGIS"]
+        PostgisQuery["ST_Covers Spatial Query"]
+        PrismaORM["Prisma Client"]
+        Tables[("Ward, Report, AuditRun, MitigationPlan, RateLimit")]
+    end
+
+    AudioIntake -->|"audio multipart"| RouteReport
+    TextIntake -->|"text and coords"| ActionSubmit
+
+    RouteReport --> RateLimiter
+    ActionSubmit --> RateLimiter
+
+    RouteReport --> GnaniSTT
+    GnaniSTT --> RouteReport
+    RouteReport --> LLMProvider
+    ActionSubmit --> LLMProvider
+
+    RouteReport --> PostgisQuery
+    ActionSubmit --> PostgisQuery
+    PostgisQuery --> DispatchRules
+    DispatchRules --> PrismaORM
+
+    RouteEarlyWarning --> PrismaORM
+    RouteStats --> PrismaORM
+    RouteAudit --> PrismaORM
+
+    RouteMitigation --> RateLimiter
+    RouteMitigation --> MitigationLock
+    RouteMitigation --> PrismaORM
+    RouteMitigation --> LLMProvider
+    LLMProvider --> Grounding
+    Grounding --> PrismaORM
+
+    PrismaORM --> Tables
+
+    RouteReport --> UI
+    ActionSubmit --> UI
+    RouteEarlyWarning --> UI
+    RouteMitigation --> UI
+    RouteAudit --> UI
+    RouteStats --> UI
 ```
 
-### Write Pipeline Stages
+### Request Flow
 
-1. Rate Limiting: Incoming requests to `submitReport` and `/api/report` are checked against a PostgreSQL-backed fixed-window rate limiter by client IP before executing STT, LLM extraction, or database writes.
-2. Report Intake: Spoken audio is transcribed via Gnani STT (or mock fallback) through `/api/report`. Text reports submit through the `submitReport` Server Action.
-3. Server Extraction: The server parses transcripts or text using an LLM or keyword fallback into a hazard category, severity score (1 to 10), and location text.
-4. Coordinates and Spatial Tagging: Coordinates are resolved from browser GPS or Delhi landmark gazetteer matching. The server executes a PostGIS `ST_Covers` query over 290 MultiPolygon ward boundaries indexed with GiST in Neon Postgres.
-5. Deterministic Dispatch: Hazard category and severity determine the action required (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`). The client cannot choose or override this value.
-6. Storage: Reports are written to the `Report` table in Postgres using Prisma.
+1. Report Intake: Spoken audio is uploaded to `/api/report` as multipart form data and transcribed by Gnani STT. Text reports are submitted directly via the `submitReport` Server Action.
+2. Rate Limiting: Requests are checked against a PostgreSQL table (`RateLimit`) per client IP before running external APIs or database writes.
+3. Extraction: The server passes transcripts or text to the LLM (or mock fallback) to extract hazard category, severity score (1 to 10), and location text.
+4. Coordinate Resolution: Coordinates are obtained from browser GPS coordinates or matched against a static gazetteer of Delhi landmark coordinates.
+5. Spatial Ward Tagging: Coordinates are matched against 290 MultiPolygon ward boundaries using PostGIS `ST_Covers`.
+6. Deterministic Dispatch: Hazard category and severity determine the action required: `dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`. Clients cannot select or override this classification.
+7. Storage: Validated reports are persisted to the `Report` table via Prisma.
 
-### SQL Read Paths
+## 3. Features and Limitations
 
-* `/api/stats`: Computes total report count, high severity count (severity >= 7), average severity, hazmat action count, and estimated prevented cost in a single SQL query directly against the `Report` table.
-* `/api/early-warning`: Aggregates reports over a 28 day window into 4 weekly buckets (W-3, W-2, W-1, W0), grouped in SQL by `COALESCE(w.name, r.rawLocation)` and `hazardCategory`. Hotspots are ranked by anomaly score `(w0 - mean) / std` and linear trend slope to provide a trend-based estimate. Also returns citywide weekly category totals and per-ward W0 counts.
-* `/api/reports`: Returns a cursor-paged list of reports with query parameters `limit` (default 50, maximum 200) and optional `cursor` (report ID). Returns `{ reports, nextCursor }`.
-* `/api/reports/[id]`: Returns a single report by ID (`{ report }`), or 404 if not found.
-* `/api/audit`: When called with an empty body (`{}`), executes a bounded SQL anomaly query against the database (`findLargestAnomalyFromDb`) to locate the largest spatial cluster in recent reports and run DBSCAN clustering without loading reports into client state. If an explicit reports array is provided in the body, it accepts up to 500 reports.
-* `/api/mitigation-plan`: Parameterized SQL query grouping the last 7 days of incidents by ward and hazard category. LangChain passes these aggregates to an LLM with structured output. The server verifies every recommended ward and category against the SQL results via `groundPlan`, enriches items with exact database numbers, and caches the record in the `MitigationPlan` table.
+### Spatial Ward Tagging with ST_Covers
+* Capability: Automatically maps latitude and longitude coordinates to one of 290 Delhi MCD wards using the PostGIS spatial relationship `ST_Covers`.
+* Limitation: Points must fall strictly inside the defined MultiPolygon boundary of a ward. Coordinates outside Delhi regional bounds or missing coordinates return an unmapped status. Wards reflect pre-2022 DataMeet boundaries (290 wards) rather than the 2022 250-ward delimitation, and certain polygons contain boundary overlaps.
 
-## Pipeline Trace
+### Early Warning Hotspot Detection
+* Capability: Groups historical reports into four consecutive 7-day buckets (W-3, W-2, W-1, W0) per ward. Identifies wards experiencing unusual volume using standardized z-scores against baseline moving averages and estimates next-week volumes using linear trend extrapolation.
+* Limitation: Requires at least four weekly buckets. Anomaly scores are standardized statistical z-scores against short-term baseline variation and are not probability percentages. Linear regression over four observations cannot model seasonal patterns, holidays, or weather shifts.
 
-Both `submitReport` and `/api/report` return a real per-stage pipeline trace (`PipelineTrace`) measuring execution duration:
+### Weekly Root-Cause Audit
+* Capability: Runs bounded SQL queries over recent reports to find spatial clusters and anomalies, running DBSCAN clustering to identify the dominant category and spatial centroid. Generates hypothesis text and recommended actions.
+* Limitation: Requires at least three reports of the same hazard category within a single ward in the current week. If insufficient reports exist, the audit returns an insufficient data status.
 
-* Speech-to-text (audio submission path only)
-* LLM extraction (detail: degraded fallback or standard model)
-* Coordinate resolution (detail: gps, gazetteer, or unresolved)
-* Ward tagging (detail: matched ward name or unmapped; recorded only when coordinates exist)
-* Dispatch rule (detail: action required enum)
-* Database write (detail: created report ID)
+### Municipal Mitigation Strategy
+* Capability: Compiles 7-day incident totals, deltas, and severity statistics into structured operational mandates. The `groundPlan` function verifies all LLM output against raw SQL aggregates to eliminate hallucinated wards, counts, or categories.
+* Limitation: Synthesizes priorities only for wards with recorded incidents in the last 7 days. Causes generated by the model are unconfirmed hypotheses, not verified root causes.
 
-Stage timings are captured using `performance.now()`. These timings represent single-request wall-clock times under current server conditions, not synthetic benchmark metrics.
+## 4. Synthetic Data Methodology
 
-## Dashboard
+The repository contains a synthetic incident dataset of 10,000 rows with ID prefix `SYN-`, plus 60 baseline test rows with ID prefix `HZ-`. All synthetic rows have `isSynthetic = true`.
 
-The dashboard provides real-time monitoring and dispatch oversight:
+* Generator: `scripts/generate_synthetic_10k.ts`, executed with fixed pseudo-random seed 42.
+* Profiling Origin: Incident category ratios, 24-hour time-of-day distributions, and day-of-week patterns were profiled from public Bengaluru grievance data (126,974 records). Only solid waste and electrical categories were mapped.
+* Assumptions: Construction debris (10%), chemical leaks (3%), and unknown categories (2%) were assigned as baseline assumptions because they were not present in the public source dataset.
+* Spatial Placement: Incident points were sampled within Delhi MCD ward polygon geometries using a two-tier Pareto distribution where the top 25 wards receive approximately 60% of baseline volume.
+* Planted Spikes: Four wards contain artificial spikes added during the most recent 7-day window (W0) to verify detection pipelines:
+  * RAJENDER NAGAR (Karol Bagh): 70 biohazard incidents
+  * NDMC CHARGE 2 (Connaught Place): 65 electrical hazard incidents
+  * AMAR COLONY (Lajpat Nagar): 55 chemical hazard incidents
+  * PANDAV NAGAR (Laxmi Nagar): 50 general overflow incidents
+* Notice: These records are synthetic demonstrations and are not real Delhi incidents.
 
-* Dispatch Badges: Visual status badges indicating required response actions (`dispatch_hazmat_bypass_standard`, `bypass_standard`, or `routine_collection`).
-* FlyTo Animation: Selecting an incident triggers smooth map animation (`flyTo`) centering the viewport on the incident coordinates.
-* Selected Ward Highlight: Clicking a report highlights the polygon boundary of its assigned ward in cyan, matched via unique composite identifiers (`<ward_id>-<NAME-SLUGGED>`) so colliding numeric ward IDs like Ward 192 resolve and render correctly.
-* Health Status Pill: Queries `/api/health` to display database connectivity, loaded ward count (290), total report count, and demo reset status.
-* Reset Demo Data Button: Displayed in the UI only when `ENABLE_DEMO_RESET` is `"true"`. Deletes only synthetic demo rows with ID prefix `HZ-` and reseeds the 60 baseline demo records. It preserves `SYN-` records.
-* OpenStreetMap Dark Filter: Renders base map tiles with a custom CSS inversion and hue rotation filter (`leaflet-tile-dark`) for readability in low-light environments.
-* Marker Cap: Renders map markers for up to the latest 300 loaded reports with an on-screen note to ensure map interaction remains smooth.
-* Load More Paging: The reports list loads in batches of 50 using cursor-based pagination via a "Load more" button.
+## 5. Early Warning Method, R2 Rule, and Backtest
 
-## Estimated Prevented Cost
+### Method
+Incidents are aggregated into four consecutive 7-day weekly windows:
+* W-3: 28 to 21 days ago
+* W-2: 21 to 14 days ago
+* W-1: 14 to 7 days ago
+* W0: 7 days ago to current timestamp
 
-Estimated prevented cost is computed only for reports with non-routine dispatch actions (`actionRequired` is not `routine_collection`). Routine collection reports evaluate to 0.
+The baseline mean is calculated over the three prior weeks:
+$$ \text{mean} = \frac{W_{-3} + W_{-2} + W_{-1}}{3} $$
 
-Formula:
+Sample variance with 2 degrees of freedom:
+$$ s^2 = \frac{\sum_{i=1}^{3} (W_{-i} - \text{mean})^2}{2} $$
+
+Effective standard deviation applies a floor to prevent division by zero or inflated scores on low baseline counts:
+$$ \text{std} = \max\left(\max(1, \sqrt{\text{mean}}), \sqrt{s^2}\right) $$
+
+Anomaly score:
+$$ z = \frac{W_0 - \text{mean}}{\text{std}} $$
+
+Next-week volume is estimated using ordinary least squares linear regression over indices 0, 1, 2, 3 corresponding to W-3, W-2, W-1, W0.
+
+### The R2 Classification Rule with MIN_HIGH=13
+Wards are classified into risk tiers:
+* High: $z \ge 2.0$ AND $W_0 \ge 13$ AND $(W_0 - \text{mean}) \ge 3$
+* Medium: $z \ge 1.0$ OR (week-over-week increase $\ge 50\%$ with $W_0 \ge 2$ and $W_{-1} \ge 3$)
+* Low: All other qualifying wards
+
+### Backtest Summary (from docs/EARLY_WARNING_BACKTEST.md)
+Monte Carlo evaluation was run across seeds 1, 2, 3, 4, 5 (fixed in advance, 5,000 synthetic Poisson trials per cell per seed).
+
+#### False Alarm Rates on Null Series (High Risk)
+* Baseline 1: 0.00% (range: 0.00% to 0.00%)
+* Baseline 3: 0.00% (range: 0.00% to 0.00%)
+* Baseline 5: 0.14% (range: 0.10% to 0.20%)
+* Baseline 10: 4.38% (range: 3.86% to 4.94%)
+* Baseline 20: 4.38% (range: 3.94% to 4.80%)
+
+#### Detection Rates for 3x Spikes (High Risk)
+* Baseline 1: 0.0% (range: 0.0% to 0.0%)
+* Baseline 3: 12.2% (range: 11.4% to 13.1%)
+* Baseline 5: 70.9% (range: 70.5% to 71.3%)
+* Baseline 10: 98.1% (range: 97.8% to 98.4%)
+* Baseline 20: 100.0% (range: 100.0% to 100.0%)
+
+#### Tuning Finding
+MIN_HIGH=8 fails the 5.00% false alarm limit on the worst seed at baseline 10 (reaching 5.36%). MIN_HIGH=13 is the lowest threshold that passes the 5.00% limit across all baselines on every seed 1 through 5.
+
+#### Stated Limitations
+* Anomaly scores are standardized z-scores against short-term baseline moving averages, not probabilities.
+* The trend estimate is a linear extrapolation, not a trained predictive forecasting model.
+* Four weekly buckets cannot support seasonal inference.
+* The backtest covers simulated planted spikes and Poisson arrival processes, not naturally occurring municipal complaint behavior.
+
+## 6. Estimated Prevented Cost
+
+Estimated prevented cost is an illustrative estimate, not measured financial savings.
+
+### Formula
+Only reports with non-routine dispatch actions (`actionRequired` not equal to `routine_collection`) are assigned an estimated prevented cost. Routine collection reports evaluate to 0 INR.
 
 $$ \text{Prevented Cost} = \text{Base Cost}(\text{hazardCategory}) \times \frac{\text{severityLevel}}{10} $$
 
-### Base Cost Constants
+If vehicle bypass routing is active, net illustrative impact subtracts detour vehicle travel cost:
+$$ \text{Detour Cost} = \text{Extra Distance (km)} \times 30 \text{ INR/km} $$
+$$ \text{Net Impact} = \max(0, \text{Prevented Cost} - \text{Detour Cost}) $$
 
-| Hazard Category | Placeholder Cost (INR) |
-|---|---|
-| `chemical` | 120,000 |
-| `biohazard_medical` | 85,000 |
-| `electrical_hazard` | 60,000 |
-| `construction_debris` | 40,000 |
-| `general_overflow` | 5,000 |
-| `unknown` (fallback) | 10,000 |
+### Placeholder Base Cost Assumptions
+* `chemical`: 120,000 INR
+* `biohazard_medical`: 85,000 INR
+* `electrical_hazard`: 60,000 INR
+* `construction_debris`: 40,000 INR
+* `general_overflow`: 5,000 INR
+* `unknown`: 10,000 INR
 
-### Stated Assumptions
+These values are illustrative assumptions with no external source. The dashboard header sums all non-routine rows in the database, including synthetic rows, without date bounds.
 
-* Every non-routine report is assumed to avoid one incident.
-* Constants are placeholders with no source and do not represent measured real-world savings.
-* The header total sums all rows in the database, including synthetic rows, with no time window.
-* Detour cost is not included in the header figure.
+## 7. Security and Limits
 
-## Synthetic Dataset
+### Server-Side Demo Reset Guard
+The demo reset action (`resetSyntheticData`) is disabled unless `ENABLE_DEMO_RESET="true"` is set on the server. If disabled, it returns an error and executes no database queries. When enabled, it deletes only rows where `isSynthetic = true` and ID begins with `HZ-`. Rows with ID prefix `SYN-` and real user submissions are protected.
 
-The system includes a 10,000 row synthetic incident dataset (`SYN-` prefix) in addition to 60 baseline seed rows (`HZ-` prefix), all marked with `isSynthetic: true`.
+### Input Validation
+All endpoints validate input using Zod schemas:
+* Reports must specify non-empty text or audio.
+* Latitude must fall within -90 to 90 and longitude within -180 to 180.
+* Delhi bounding box checks in `validateDelhiCoordinates` verify coordinates are between longitude 76.7 to 77.6 and latitude 28.3 to 29.0.
+* Invalid payloads immediately return HTTP 400 Bad Request.
 
-* Generator: `scripts/generate_synthetic_10k.ts`, executed with a fixed pseudo-random seed of 42.
-* CLI Flags: Supports `--dry-run` to simulate generation without database queries or writes, and `--delete-batch` to remove existing `SYN-` records.
-* Profiling Origin: Incident category ratios, hour-of-day distributions (24 weights), and weekday weights were profiled from a public Bengaluru BBMP grievance dataset (126,974 records). Only Electrical and Solid Waste Related categories were mapped; all other grievance categories were excluded. The source CSV is excluded from version control.
-* Category Mapping:
-  * Solid Waste (Garbage) Related maps to `general_overflow`.
-  * Electrical maps to `electrical_hazard`.
-  * Biohazard incidents are derived from the "Dead animal(s)" subcategory under Solid Waste.
-  * Construction debris (10%), chemical (3%), and unknown (2%) are assumed baseline proportions, not measured values.
-* Spatial Distribution: Ward allocation follows a two-tier Pareto distribution where the top 25 wards receive approximately 60% of baseline traffic.
-* Planted Spikes: Four wards contain artificial incident spikes concentrated in the most recent 7 days (W0) added on top of baseline volume:
-  * RAJENDER NAGAR (Karol Bagh area): 70 biohazard incidents
-  * NDMC CHARGE 2: 65 electrical hazard incidents
-  * AMAR COLONY: 55 chemical hazard incidents
-  * PANDAV NAGAR: 50 general overflow incidents
-* Notice on Data: This dataset is entirely synthetic and does not represent official Delhi municipal complaint records. The planted spikes exist to test the early warning detection pipeline.
+### Rate Limiting
+Rate limiting is enforced per client IP using fixed time windows backed by the `RateLimit` table in PostgreSQL:
+* `/api/report` and `submitReport`: Limited to `RATE_LIMIT_MAX` (default 10) requests per `RATE_LIMIT_WINDOW_SECONDS` (default 600 seconds).
+* `/api/transcribe`: Checked against the rate limiter.
+* `/api/mitigation-plan`: Enforces both per-IP rate limiting and concurrency locking.
+* Fails Open: If the database rate limit query throws, the function catches the error, logs a warning, and allows the request through so database issues do not block citizen intake.
 
-## Verification and Spatial Benchmark
+### Mitigation Concurrency Lock
+Plan generation uses an atomic database row lock (`lock:mitigation`) with a 60-second time-to-live stored in the `RateLimit` table. This prevents concurrent duplicate LLM synthesis runs across serverless instances without holding database connections open.
 
-### Point-in-Polygon Verification
+## 8. LLM Integration and Fallbacks
 
-All 10,000 synthetic records were verified with `ST_Covers` against their saved ward geometry:
+### Model Hypotheses
+Root causes and operational recommendations generated by the LLM are model hypotheses, not confirmed facts.
 
-```sql
-SELECT
-  COUNT(*) AS total_synthetic,
-  COUNT(CASE WHEN r."wardId" IS NULL THEN 1 END) AS missing_ward,
-  COUNT(CASE WHEN NOT ST_Covers(w.geom, ST_SetSRID(ST_MakePoint(r.lng, r.lat), 4326)) THEN 1 END) AS outside_ward
-FROM "Report" r
-LEFT JOIN "Ward" w ON r."wardId" = w.id
-WHERE r."isSynthetic" = true AND r.id LIKE 'SYN-%';
+### Provider and Model Routing
+* Configuration: Controlled via `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_EXTRACT`, and `LLM_MODEL_AUDIT`.
+* Default Free Tier: The default configuration uses `openrouter/free`. Available models on free endpoints can vary per call, face upstream provider rate limits, or be deprecated without notice.
+* Fallback Behavior:
+  * When `LLM_PROVIDER=mock` or when external calls fail, extraction falls back to deterministic keyword matching.
+  * The Weekly Audit route falls back to template text labelled: "Template text, LLM unavailable".
+  * The Mitigation Plan serves the latest cached plan from the database or returns status `degraded`.
+
+## 9. Database Schema and Spatial Query
+
+### Prisma Schema (from prisma/schema.prisma)
+
+```prisma
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [postgis]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum Role {
+  DRIVER
+  DISPATCHER
+  ADMIN
+}
+
+enum HazardCategory {
+  biohazard_medical
+  construction_debris
+  electrical_hazard
+  chemical
+  general_overflow
+  unknown
+}
+
+enum ReportStatus {
+  OPEN
+  DISPATCHED
+  RESOLVED
+}
+
+enum ActionRequired {
+  dispatch_hazmat_bypass_standard
+  bypass_standard
+  routine_collection
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  role      Role     @default(DRIVER)
+  wardId    String?
+  ward      Ward?    @relation(fields: [wardId], references: [id])
+  reports   Report[]
+  createdAt DateTime @default(now())
+}
+
+model Ward {
+  id           String                                  @id @default(cuid())
+  externalId   String                                  @unique
+  name         String
+  sourceWardId String?
+  geom         Unsupported("geometry(MultiPolygon, 4326)")?
+  users        User[]
+  reports      Report[]
+  audits       AuditRun[]
+
+  @@index([geom], type: Gist, map: "ward_geom_gist")
+}
+
+model Report {
+  id                    String         @id
+  hazardCategory        HazardCategory
+  severityLevel         Int
+  rawLocation           String
+  lat                   Float?
+  lng                   Float?
+  transcript            String
+  transcriptMock        Boolean        @default(false)
+  translatedEnglish     String?
+  actionRequired        ActionRequired
+  status                ReportStatus   @default(OPEN)
+  estimatedPreventedInr Int?
+  isSynthetic           Boolean        @default(false)
+  reporterId            String?
+  reporter              User?          @relation(fields: [reporterId], references: [id])
+  wardId                String?
+  ward                  Ward?          @relation(fields: [wardId], references: [id])
+  createdAt             DateTime       @default(now())
+  resolvedAt            DateTime?
+
+  @@index([wardId, createdAt])
+}
+
+model AuditRun {
+  id              String   @id @default(cuid())
+  wardId          String?
+  ward            Ward?    @relation(fields: [wardId], references: [id])
+  weekStart       DateTime
+  dominantAnomaly String
+  rootCause       String
+  recommendation  String
+  createdAt       DateTime @default(now())
+}
+
+model MitigationPlan {
+  id                String   @id @default(cuid())
+  windowStart       DateTime
+  windowEnd         DateTime
+  model             String
+  includesSynthetic Boolean
+  aggregatesJson    Json
+  planJson          Json
+  createdAt         DateTime @default(now())
+}
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart], name: "key_windowStart")
+  @@index([windowStart])
+}
 ```
 
-Result: 10,000 verified rows, 0 outside their assigned ward, 0 missing a ward relation.
-
-### Spatial Join Benchmark
-
-Spatial join querying all report coordinates against all 290 MCD ward polygons:
+### Spatial Query (from src/lib/spatial/wardsDb.ts)
 
 ```sql
-EXPLAIN ANALYZE
-SELECT r.id, w."externalId"
-FROM "Report" r
-JOIN "Ward" w
-  ON ST_Covers(w.geom, ST_SetSRID(ST_MakePoint(r.lng, r.lat), 4326))
-WHERE r."isSynthetic" = true;
+SELECT id, "externalId", name, "sourceWardId"
+FROM "Ward"
+WHERE ST_Covers(geom, ST_SetSRID(ST_MakePoint(${lng}::double precision, ${lat}::double precision), 4326))
+ORDER BY "externalId"
+LIMIT 1;
 ```
 
-Execution characteristics:
-* Query plan: Sequential Scan on `Report` with nested Index Scan on `Ward` using the GiST spatial index `ward_geom_gist`.
-* Execution time: 140 to 150 ms against a live Neon Postgres instance over the network.
-* Note: This timing represents a single query execution over network latency to Neon Postgres, not a high-throughput scalability claim.
-
-### Note on Ward 192 Composite Keys
-
-The source GeoJSON dataset contains two separate wards sharing the same `ward_id` ("192"): index 82 (`GREATER KAILASH-I`) and index 192 (`Ward 192`). To prevent key collisions during database imports and synthetic data sampling, wards are identified by a unique composite external identifier (`<ward_id>-<NAME-SLUGGED>`), yielding `192-GREATER-KAILASH-I` and `192-WARD-192`.
-
-## Key Design Decisions
-
-* Counting stays in SQL: The LLM never calculates counts, sums, or percentage changes. Postgres performs all grouping, counting, and severity averages. The LLM only generates qualitative hypotheses, urgency ratings, and operational tasks.
-* Anti-hallucination grounding: The `groundPlan` function checks every priority returned by the LLM against the actual weekly SQL aggregates. If the model references an unknown wardKey or hazard category, or provides duplicate priorities, the plan is rejected with a `GroundingError`.
-* Zero raw text sent to mitigation LLM: Citizen voice transcripts, raw location notes, and PII are never passed to the mitigation model. The prompt receives only structured ward keys, ward names, categories, counts, and severity statistics.
-* Server-controlled dispatch rules: The browser client never supplies `hazard_category`, `severity_level`, or `action_required`. All categorization, severity scoring, and routing rules execute strictly on the server.
-* Stable ward externalId slug: Composite slug keys ensure multi-polygon features sharing numeric IDs import into distinct database rows.
-
-## Tech Stack
-
-* Framework: Next.js 16.4 (App Router, Turbopack, Cache Components, Partial Prerendering)
-* Language: TypeScript (strict mode, no any)
-* Database: Neon PostgreSQL with PostGIS extension (290 Delhi MCD MultiPolygon wards, GiST spatial index)
-* ORM: Prisma 6.19
-* AI and LLM: LangChain (`@langchain/core`, `@langchain/openai`) via OpenRouter, with built-in mock fallback
-* Speech-to-Text: Gnani Vachana STT API (`hi-IN`) with mock fallback
-* Maps: Leaflet, React-Leaflet, with fallback Turf.js spatial helpers
-* Testing: Vitest (unit tests mock-isolated; separate integration suite for database)
-* Container: Docker multi-stage build on Debian `node:22-slim`
-
-## Getting Started
+## 10. Setup and Installation
 
 ### Prerequisites
-
 * Node.js 22 LTS
-* PostgreSQL instance with PostGIS extension enabled (such as Neon Postgres)
+* PostgreSQL with PostGIS extension (e.g. Neon Postgres)
 
-### Installation
+### Environment Variables
 
-Clone the repository and install dependencies:
+| Variable Name | Purpose | Scope |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Pooled PostgreSQL connection string for application queries | Server only |
+| `DIRECT_URL` | Direct PostgreSQL connection string for Prisma migrations | Server only |
+| `ENABLE_DEMO_RESET` | Guard enabling demo data reset functionality when set to true | Server only |
+| `LLM_PROVIDER` | LLM execution mode: mock, openrouter, or evon | Server only |
+| `LLM_BASE_URL` | Base URL for LLM provider API endpoint | Server only |
+| `LLM_API_KEY` | API authentication key for LLM provider | Server only |
+| `LLM_MODEL_EXTRACT` | Model slug for citizen report hazard extraction | Server only |
+| `LLM_MODEL_AUDIT` | Model slug for weekly audit and mitigation planning | Server only |
+| `GNANI_API_KEY` | API key for Gnani speech-to-text service | Server only |
+| `GNANI_STT_URL` | HTTP endpoint URL for Gnani speech transcription | Server only |
+| `NEXT_PUBLIC_MAP_PROVIDER` | Map tile layer provider selection | Client and Server |
+| `RATE_LIMIT_MAX` | Maximum number of allowed requests per IP within a rate limit window | Server only |
+| `RATE_LIMIT_WINDOW_SECONDS` | Fixed window duration in seconds for IP rate limiting | Server only |
 
-```bash
-git clone https://github.com/kaizen105/Garbage_unstop_project.git
-cd Garbage_unstop_project
+### Setup Commands (Windows PowerShell)
+
+```powershell
+# 1. Install dependencies
 npm install
-```
 
-### Environment Configuration
+# 2. Configure environment
+Copy-Item .env.example .env
+# Edit .env with your PostgreSQL credentials
 
-Copy `.env.example` to `.env` and fill in the required variables:
-
-```bash
-cp .env.example .env
-```
-
-Environment variables configured in `.env.example`:
-
-* `DATABASE_URL`: Pooled connection string for Neon PostgreSQL.
-* `DIRECT_URL`: Direct connection string for PostgreSQL schema migrations and pushes.
-* `ENABLE_DEMO_RESET`: When set to "true", enables the Reset demo data button on the dashboard.
-* `LLM_PROVIDER`: Provider mode (`mock`, `openrouter`, or `evon`). Defaults to `mock`.
-* `LLM_BASE_URL`: Base URL for OpenRouter or custom endpoint (defaults to `https://openrouter.ai/api/v1`).
-* `LLM_API_KEY`: API key for the LLM provider. The code also accepts `OPENROUTER_API_KEY` as an alias.
-* `LLM_MODEL_EXTRACT`: Model slug for hazard extraction (defaults to `openrouter/free`).
-* `LLM_MODEL_AUDIT`: Model slug for audit and mitigation planning (defaults to `openrouter/free`).
-* `GNANI_API_KEY`: API key for Gnani speech transcription service. Optional; falls back to mock if empty.
-* `GNANI_STT_URL`: URL for Gnani speech-to-text service.
-* `NEXT_PUBLIC_MAP_PROVIDER`: Map tile provider (`leaflet` or `mapbox`, defaults to `leaflet`).
-* `RATE_LIMIT_MAX`: Maximum allowed report submissions per IP per window (defaults to `10`).
-* `RATE_LIMIT_WINDOW_SECONDS`: Duration of the rate limit window in seconds (defaults to `600`, or 10 minutes).
-
-### Database Setup and Seeding
-
-Run database schema setup and ward polygon imports in this exact order:
-
-```bash
-# Push Prisma schema to Postgres
+# 3. Push database schema to PostgreSQL
 npm run db:push
 
-# Import Delhi ward boundaries into PostGIS (requires data/delhi_wards.json)
+# 4. Import Delhi ward polygon geometries into PostGIS
 npm run db:import-wards
 
-# Seed database with initial synthetic reports and tag them against PostGIS
+# 5. Seed baseline demo records
 npm run db:seed
-```
 
-### Start Development Server
+# 6. Optional: Generate 10k synthetic records profiled from public Bengaluru grievance data
+npm run gen:10k
 
-```bash
+# 7. Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000 in your browser.
 
-## Scripts and Commands
+## 11. Testing
 
-```bash
-# Profile grievance CSV to extract category distributions and time weights
-npm run profile
+All test commands run via Vitest. Counts below reflect verified execution on 2026-11-19.
 
-# Dry-run synthetic generation (simulates 10k rows without DB connection or writes)
-npm run gen:10k:dry
-
-# Generate 10k synthetic records and insert into PostgreSQL
-npm run gen:10k
-
-# Delete all generated synthetic records from PostgreSQL
-npx tsx scripts/generate_synthetic_10k.ts --delete-batch
-```
-
-Warning: `npm run gen:10k` writes directly to the database connection specified in `.env` (the same database instance used by Vercel deployments). Always test changes with `npm run gen:10k:dry` before running database inserts.
-
-## Testing
-
-The project maintains two distinct test setups:
-
-```bash
-# Run unit tests (97 tests across 21 suites, completely offline, no DB or network access)
+### Unit Tests (Offline)
+Unit tests run entirely in memory without network or database dependencies:
+```powershell
 npm test
+```
+Result on 2026-11-19:
+* Test Files: 33 passed (33)
+* Tests: 217 passed (217)
+* Duration: 6.45 seconds
 
-# Run integration tests (validates PostGIS ST_Covers queries and SQL aggregation against live Postgres)
+### Integration Tests (Database and PostGIS)
+Integration tests run against a live PostgreSQL database with PostGIS:
+```powershell
 npm run test:int
 ```
+Result on 2026-11-19:
+* Test Files: 3 passed (3)
+* Tests: 6 passed (6)
+* Duration: 7.72 seconds
 
-Continuous integration in GitHub Actions (`.github/workflows/test.yml`) runs unit tests only (`npm test`) alongside type checking and linting. Integration tests are not run in CI because no database service is provisioned during the workflow.
-
-## Docker Deployment
-
-The Dockerfile uses a multi-stage Debian build (`node:22-slim`) with non-root execution (`nextjs:nodejs`), producing a standalone Next.js server image.
-
-### Building the Image
-
-Build the container image locally without database credentials or build secrets:
-
-```bash
-docker build -t safaikavach:local .
+### Early Warning Backtest
+Runs Monte Carlo simulation evaluating R2 anomaly detection across seeds 1 to 5:
+```powershell
+npm run backtest
 ```
+Result on 2026-11-19:
+* Seeds evaluated: 1, 2, 3, 4, 5 (5,000 trials per cell)
+* Outcome: Confirms MIN_HIGH=13 satisfies the 5.00% false alarm rate limit on the worst seed across all baselines.
 
-### Running the Container
+## 12. Known Limitations and What Is Unproven
 
-All credentials must be supplied at runtime only:
+### Known Limitations
+* Synthetic Data Only: Aside from user reports entered during an active session, all data is synthetic.
+* Pre-2022 Boundaries: Uses pre-2022 DataMeet ward boundary polygons (290 wards) rather than the 2022 MCD 250-ward delimitation. Boundary overlaps exist in some areas.
+* Small Baseline Moving Window: Four 7-day buckets provide insufficient depth to capture seasonal shifts, holidays, or weather cycles.
+* Linear Trend Extrapolation: Next-week projections represent simple linear regressions over four numbers and are not trained forecasting models.
+* Statistical Scores: Anomaly scores are standardized z-scores against short-term baseline variation, not event probabilities.
+* Rate Limiting Fails Open: Database rate limit errors fail open to keep intake available. Per-IP tracking does not prevent distributed abuse.
+* Unpinned Free Tier Models: Free tier models on OpenRouter can vary in availability, formatting reliability, and response latency.
+* Avoided Cost Assumptions: Dollar and rupee values are placeholder assumptions, not measured municipal financial savings.
 
-```bash
-docker run -p 3000:3000 --env-file .env safaikavach:local
-```
+### What Is Unproven
+* Real-World Citizen Reporting Behavior: The system has not been tested with live municipal call volumes, batch reporting, or citizen reporting bursts.
+* Noisy Audio Robustness: Speech-to-text accuracy has not been validated against noisy field audio from heavy traffic or diverse dialects.
+* Production Scalability Beyond 10,000 Rows: Spatial queries scan the report table sequentially; indexing or partitioning for hundred-thousand-row tables has not been tested in production.
 
-## Future Work
+## 13. Screenshots
 
-The following items are planned improvements and are not currently implemented.
-
-* Authentication and abuse detection: Add API authentication, submission audit logging, and automated abuse detection beyond basic per-IP limits.
-* Detection backtest for Early Warning: Inject spikes of varied sizes into a copy of the data, run the existing anomaly score, and report detection rate, false alarm rate and detection delay. Current evidence only shows that planted spikes are detected, which tests the pipeline and does not show how the method performs on naturally occurring changes. The anomaly score uses only four weekly observations, so its baseline is a small sample.
-* Map marker clustering: Replace the loaded-report marker cap with clustering so the map can represent all rows.
-* Spatial index on report coordinates: Add a spatial index on report coordinates, or date partitioning, if the report table grows well beyond 10,000 rows. The current benchmark scans the report table sequentially, which is acceptable at this size.
-
-## Known Limitations
-
-* Synthetic base data: All baseline incident records are synthetic demo data, except for live reports submitted during an active session.
-* Pre-2022 ward boundaries: Ward polygons originate from DataMeet GeoJSON and predate the 2022 MCD 250-ward delimitation. Certain polygons feature boundary overlaps (for example, KHANPUR and TIGRI).
-* OpenStreetMap tile usage: The public OpenStreetMap tile server is intended for development and low-volume evaluation only. Production deployments should use a dedicated tile provider.
-* Unpinned LLM router: The default extraction and audit model slug `openrouter/free` dynamically routes requests to available free models, which may vary in output formatting reliability.
-* Biohazard data source: Biohazard proportions were derived from municipal animal carcass removal requests rather than clinical or hazardous medical waste filings.
-* Loaded report map limit: The live map displays markers only for reports currently loaded into client view state (capped at the latest 300 reports), rather than all 10,000 database rows.
-* Rate limiting behavior: Report submission in `submitReport` and `/api/report` enforces per-IP fixed-window rate limiting backed by PostgreSQL. The limiter fails open if database connectivity fails so that report intake remains available, and per-IP tracking does not prevent distributed abuse. The `/api/mitigation-plan` endpoint maintains a separate in-memory limiter scoped per server instance.
-
-## Project Structure
-
-```
-├── .github/
-│   └── workflows/        # GitHub Actions continuous integration workflow (test.yml)
-├── data/                 # Delhi ward polygons, landmark gazetteer, and profile cache
-├── prisma/               # Prisma PostGIS schema definition and seed scripts
-├── public/               # Static assets and web icons
-├── scripts/              # Data generation, grievance profiler, and boundary import scripts
-│   └── data/             # Transcript templates for synthetic incident generation
-├── src/
-│   ├── app/              # Next.js App Router pages, Server Actions, and API route handlers
-│   │   ├── actions/      # Server Actions (submitReport, resetSyntheticData)
-│   │   └── api/          # Route handlers (reports, stats, early-warning, audit, health)
-│   ├── components/       # React UI components
-│   │   ├── dashboard/    # Analytics panels, stats cards, and action buttons
-│   │   ├── map/          # Leaflet map container and polygon layer rendering
-│   │   └── voice/        # Voice recording and transcription intake interface
-│   ├── data/             # Static report seed definitions
-│   ├── lib/              # Core business logic and shared utilities
-│   │   ├── audit/        # Anomaly clustering and audit generation
-│   │   ├── db/           # Prisma client singleton
-│   │   ├── early-warning/# Trend calculation and SQL bucket conversion
-│   │   ├── finance/      # Prevented damage cost estimation formulas
-│   │   ├── gnani/        # Speech-to-text API client
-│   │   ├── llm/          # Model prompt chains and extraction parsers
-│   │   ├── mitigation/   # SQL aggregation and anti-hallucination grounding
-│   │   ├── reports/      # Report service and data transfer mapping
-│   │   ├── routing/      # Road routing and detour computation
-│   │   ├── spatial/      # PostGIS queries, gazetteer lookup, and Turf fallbacks
-│   │   ├── store/        # Client state management context
-│   │   ├── utils/        # Text and status formatting helpers
-│   │   └── validation/   # Zod validation schemas
-│   └── types/            # TypeScript ambient type declarations
-├── Dockerfile            # Multi-stage production container build definition
-├── next.config.ts        # Next.js configuration
-├── package.json          # Project dependencies, scripts, and engine specifications
-└── tsconfig.json         # TypeScript compiler configuration
-```
+The screenshot image files `docs/screenshots/live-map.png`, `docs/screenshots/early-warning.png`, `docs/screenshots/mitigation.png`, and `docs/screenshots/demo.gif` were not found in the repository file system.
