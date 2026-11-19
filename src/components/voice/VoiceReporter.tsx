@@ -53,7 +53,7 @@ export function VoiceReporter() {
     }
     if (timer.current) clearInterval(timer.current);
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
   }, []);
@@ -92,111 +92,34 @@ export function VoiceReporter() {
   useEffect(() => {
     return () => {
       if (timer.current) clearInterval(timer.current);
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
-
-
-  const recordingStartTime = useRef<number>(0);
-
-  const resampleTo16kWav = async (blob: Blob): Promise<Blob> => {
-    if (!blob || blob.size < 100) {
-      throw new Error("Recording too short or empty audio.");
-    }
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const audioCtx = new AudioContextClass();
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error("Recording too short or empty audio.");
-      }
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      
-      const offlineCtx = new OfflineAudioContext(1, Math.max(1, Math.floor(audioBuffer.duration * 16000)), 16000);
-      const source = offlineCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(offlineCtx.destination);
-      source.start(0);
-      const rendered = await offlineCtx.startRendering();
-      
-      const length = rendered.length;
-      const wavBuffer = new ArrayBuffer(44 + length * 2);
-      const view = new DataView(wavBuffer);
-      
-      const writeString = (offset: number, str: string) => {
-        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-      };
-      writeString(0, 'RIFF');
-      view.setUint32(4, 36 + length * 2, true);
-      writeString(8, 'WAVE');
-      writeString(12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true); 
-      view.setUint16(22, 1, true); 
-      view.setUint32(24, 16000, true);
-      view.setUint32(28, 16000 * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, 'data');
-      view.setUint32(40, length * 2, true);
-      
-      let offset = 44;
-      const channelData = rendered.getChannelData(0);
-      for (let i = 0; i < length; i++) {
-        const s = Math.max(-1, Math.min(1, channelData[i] || 0));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-        offset += 2;
-      }
-      return new Blob([wavBuffer], { type: "audio/wav" });
-    } finally {
-      audioCtx.close();
-    }
-  };
-
   const startRecording = useCallback(async () => {
-    if (state === "recording") {
-      stopRecording();
-      return;
-    }
+    setErrorMsg("");
+    audioChunks.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const mr = new MediaRecorder(stream);
       mediaRecorder.current = mr;
-      audioChunks.current = [];
-      recordingStartTime.current = Date.now();
 
       mr.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunks.current.push(e.data);
-        }
+        if (e.data.size > 0) audioChunks.current.push(e.data);
       };
 
-      mr.onstop = async () => {
-        const rawBlob = new Blob(audioChunks.current, { type: mr.mimeType || "audio/webm" });
-        const duration = Date.now() - recordingStartTime.current;
-        if (duration < 600 || rawBlob.size < 100) {
-          setState("error");
-          setErrorMsg("Recording too short. Please speak clearly for at least 1-2 seconds.");
-          return;
-        }
-
-        try {
-          const wavBlob = await resampleTo16kWav(rawBlob);
-          await processAudio(wavBlob);
-        } catch (err: unknown) {
-          setState("error");
-          setErrorMsg(err instanceof Error ? err.message : "Audio processing failed.");
-        }
+      mr.onstop = () => {
+        const blob = new Blob(audioChunks.current, { type: "audio/wav" });
+        processAudio(blob);
       };
 
-      mr.start(250);
+      mr.start();
       setState("recording");
       setTime(30);
-      
+
       timer.current = setInterval(() => {
-        setTime(t => {
+        setTime((t) => {
           if (t <= 1) {
             stopRecording();
             return 0;
@@ -208,7 +131,7 @@ export function VoiceReporter() {
       setState("error");
       setErrorMsg("Microphone access denied or unsupported.");
     }
-  }, [state, stopRecording, processAudio]);
+  }, [processAudio, stopRecording]);
 
   const submitText = async () => {
     if (!textInput.trim()) return;
@@ -243,95 +166,200 @@ export function VoiceReporter() {
   };
 
   return (
-    <div className="w-full max-w-full p-4 sm:p-5 mx-auto bg-slate-900 border border-slate-800 rounded-xl shadow-md space-y-4 text-slate-100 box-border">
+    <div className="w-full max-w-full p-4 sm:p-5 mx-auto bg-slate-900 border border-slate-800 rounded-xl shadow-lg space-y-4 text-slate-100 box-border">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">Incident Reporter</h3>
+          <p className="text-[11px] text-slate-400">Voice or text hazard dispatch intake</p>
+        </div>
+        <span className="text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded">
+          Live Stream
+        </span>
+      </div>
+
       {state === "idle" && (
         <>
           <div className="flex flex-col gap-2">
-            <button 
+            <button
               type="button"
               onClick={startRecording}
-              className="w-full py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold rounded-xl text-center shadow-md transition-all flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:from-red-700 active:to-rose-700 text-white font-semibold rounded-xl text-center shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-red-500/30"
             >
-              <span className="w-3 h-3 rounded-full bg-white animate-ping" />
-              <span>Click to Start Recording</span>
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
+              <span className="text-sm">Click to Start Voice Recording</span>
             </button>
-            <div className="text-center text-xs text-slate-400">Tap once to start, speak clearly, then tap stop</div>
+            <div className="text-center text-[11px] text-slate-400">
+              Microphone capture in Hindi or English (max 30s)
+            </div>
           </div>
-          <div className="text-center text-slate-500 text-xs my-1 font-medium tracking-wide">OR TYPE BELOW</div>
-          <textarea 
-            value={textInput} 
-            onChange={e => setTextInput(e.target.value)}
-            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-md text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 text-sm"
-            placeholder="Describe the hazard in Hindi or English..."
+
+          <div className="flex items-center gap-2 my-1">
+            <div className="flex-1 h-px bg-slate-800"></div>
+            <span className="text-slate-500 text-[10px] font-bold tracking-wider">OR ENTER TEXT</span>
+            <div className="flex-1 h-px bg-slate-800"></div>
+          </div>
+
+          <textarea
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs leading-relaxed"
+            placeholder="Describe the hazard location and details in Hindi or English..."
             rows={3}
           />
-          <div className="flex flex-col gap-1.5 my-2">
-            <span className="text-xs text-slate-400 font-medium">Try a sample:</span>
-            <button onClick={() => setTextInput("medical waste dumped near Karol Bagh metro pillar 44")} className="text-left text-xs bg-slate-800/80 p-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60 transition-colors">medical waste at Karol Bagh metro pillar 44</button>
-            <button onClick={() => setTextInput("heavy rubble and exposed electrical wiring near Connaught Place")} className="text-left text-xs bg-slate-800/80 p-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60 transition-colors">rubble and exposed wiring near Connaught Place</button>
-            <button onClick={() => setTextInput("huge garbage overflow happening in Lajpat Nagar")} className="text-left text-xs bg-slate-800/80 p-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60 transition-colors">garbage overflow in Lajpat Nagar</button>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] text-slate-400 font-medium">Quick dispatch samples:</span>
+            <button
+              type="button"
+              onClick={() => setTextInput("medical waste dumped near Karol Bagh metro pillar 44")}
+              className="text-left text-[11px] bg-slate-950/70 p-2 rounded border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-colors truncate"
+            >
+              <span className="text-red-400 font-bold mr-1.5">[Biohazard]</span>
+              medical waste near Karol Bagh metro pillar 44
+            </button>
+            <button
+              type="button"
+              onClick={() => setTextInput("heavy rubble and exposed electrical wiring near Connaught Place")}
+              className="text-left text-[11px] bg-slate-950/70 p-2 rounded border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-colors truncate"
+            >
+              <span className="text-amber-400 font-bold mr-1.5">[Electrical]</span>
+              rubble and exposed wiring near Connaught Place
+            </button>
+            <button
+              type="button"
+              onClick={() => setTextInput("huge garbage overflow happening in Lajpat Nagar")}
+              className="text-left text-[11px] bg-slate-950/70 p-2 rounded border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-colors truncate"
+            >
+              <span className="text-emerald-400 font-bold mr-1.5">[Overflow]</span>
+              garbage overflow in Lajpat Nagar
+            </button>
           </div>
-          <button onClick={submitText} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md text-sm transition-colors">Submit Text</button>
+
+          <button
+            type="button"
+            onClick={submitText}
+            disabled={!textInput.trim()}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-lg text-xs transition-colors cursor-pointer shadow"
+          >
+            Submit Text Report
+          </button>
         </>
       )}
 
       {state === "recording" && (
-        <div className="flex flex-col gap-2">
-          <button 
+        <div className="flex flex-col gap-3 p-3 bg-red-950/30 border border-red-900/60 rounded-xl">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs font-semibold text-red-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+              Recording Audio Stream
+            </span>
+            <span className="font-mono text-sm font-bold text-red-300">{time}s remaining</span>
+          </div>
+
+          {/* Simple Animated Audio Wave Bars */}
+          <div className="flex items-center justify-center gap-1.5 h-8 py-1">
+            <span className="w-1.5 bg-red-500 rounded-full animate-bounce h-3"></span>
+            <span className="w-1.5 bg-red-400 rounded-full animate-bounce h-6 delay-75"></span>
+            <span className="w-1.5 bg-red-500 rounded-full animate-bounce h-4 delay-150"></span>
+            <span className="w-1.5 bg-red-400 rounded-full animate-bounce h-7 delay-100"></span>
+            <span className="w-1.5 bg-red-500 rounded-full animate-bounce h-5 delay-200"></span>
+            <span className="w-1.5 bg-red-400 rounded-full animate-bounce h-3 delay-75"></span>
+          </div>
+
+          <button
             type="button"
             onClick={stopRecording}
-            className="w-full py-5 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl shadow-lg animate-pulse flex items-center justify-center gap-2"
+            className="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer text-xs"
           >
-            <span className="w-4 h-4 bg-white rounded-sm" />
-            <span>Click to Stop and Submit ({time}s)</span>
+            <span className="w-3 h-3 bg-white rounded-sm"></span>
+            <span>Stop Recording & Submit</span>
           </button>
-          <div className="text-center text-xs text-red-400 font-medium animate-pulse">
-            Listening... Speak now, then click the button to finish.
+          <div className="text-center text-[10px] text-red-300/80">
+            Speak clearly into microphone. Click above when finished.
           </div>
         </div>
       )}
 
       {state === "processing" && (
-        <div className="text-center text-blue-400 py-6 text-sm">Processing... Please wait.</div>
+        <div className="flex flex-col items-center justify-center py-8 space-y-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-xs font-medium text-blue-400">Processing Incident Report...</div>
+          <div className="text-[10px] text-slate-500">Transcribing audio, extracting hazard and resolving ward</div>
+        </div>
       )}
 
       {state === "error" && (
-        <div className="text-red-400 text-center py-4 bg-red-950/40 border border-red-900 rounded-lg p-3">
-          <p className="text-sm">{errorMsg}</p>
-          <button onClick={() => setState("idle")} className="mt-3 text-blue-400 hover:underline text-xs">Try again</button>
+        <div className="text-red-400 text-center py-4 bg-red-950/40 border border-red-900 rounded-lg p-3 space-y-2">
+          <p className="text-xs">{errorMsg}</p>
+          <button
+            type="button"
+            onClick={() => setState("idle")}
+            className="text-xs text-blue-400 hover:text-blue-300 underline cursor-pointer"
+          >
+            Return to form
+          </button>
         </div>
       )}
 
       {state === "success" && result && (
-        <div className="border border-emerald-800/80 p-4 rounded-lg bg-emerald-950/40 text-slate-200">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-emerald-400 text-sm">Report Generated</h3>
+        <div className="border border-emerald-800/80 p-4 rounded-lg bg-emerald-950/30 text-slate-200 space-y-3">
+          <div className="flex items-center justify-between border-b border-emerald-800/60 pb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <h4 className="font-bold text-emerald-400 text-xs">Incident Recorded</h4>
+            </div>
             {result.degraded && (
-              <span className="text-xs bg-amber-950 border border-amber-700 text-amber-300 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-amber-950 border border-amber-700 text-amber-300 px-2 py-0.5 rounded font-mono">
                 Degraded Fallback
               </span>
             )}
           </div>
+
           {result.degraded && result.degraded_reason && (
-            <div className="mb-2 text-xs bg-amber-950/60 border border-amber-800 p-2 rounded text-amber-300">
+            <div className="text-[11px] bg-amber-950/60 border border-amber-800 p-2 rounded text-amber-300">
               <strong>Degraded Notice:</strong> {result.degraded_reason}
             </div>
           )}
-          <p className="text-xs"><strong>ID:</strong> {result.report.report_id}</p>
-          <p className="text-xs"><strong>Category:</strong> {humanizeCategory(result.report.hazard_category)}</p>
-          <p className="text-xs"><strong>Severity:</strong> {result.report.severity_level}/10</p>
-          <p className="text-xs"><strong>Location:</strong> {result.report.raw_location || <span className="text-slate-400 italic">Location not resolved</span>}</p>
-          <p className="text-xs"><strong>Action:</strong> {result.report.action_required}</p>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/80 p-2.5 rounded border border-slate-800">
+            <div>
+              <span className="text-slate-500 block">Report ID:</span>
+              <span className="font-mono text-slate-200">{result.report.report_id}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Severity:</span>
+              <span className={`font-bold ${result.report.severity_level >= 7 ? "text-red-400" : "text-amber-400"}`}>
+                {result.report.severity_level} / 10
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Category:</span>
+              <span className="font-medium text-slate-200">{humanizeCategory(result.report.hazard_category)}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Action:</span>
+              <span className="font-mono text-[10px] text-blue-300 truncate block">{result.report.action_required}</span>
+            </div>
+            <div className="col-span-2">
+              <span className="text-slate-500 block">Location:</span>
+              <span className="text-slate-300 truncate block">
+                {result.report.raw_location || <span className="text-slate-500 italic">Location not resolved</span>}
+              </span>
+            </div>
+          </div>
 
           {result.trace && (
-            <div className="mt-2 text-xs bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
+            <div className="text-[10px] bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
               <div className="flex justify-between items-center text-slate-400 font-semibold border-b border-slate-800 pb-1">
                 <span>Pipeline trace ({result.trace.stages.length} stages)</span>
                 <span className="font-mono text-emerald-400">{result.trace.totalMs}ms</span>
               </div>
               <div className="space-y-1">
                 {result.trace.stages.map((st, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-[11px]">
+                  <div key={idx} className="flex justify-between items-center text-[10px]">
                     <div className="flex items-center gap-1.5 truncate">
                       <span className={st.ok ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                         {st.ok ? "[OK]" : "[FAIL]"}
@@ -356,13 +384,28 @@ export function VoiceReporter() {
             </div>
           )}
 
-          <div className="mt-2 text-xs text-slate-300 bg-slate-900/90 p-2.5 rounded border border-slate-800">
-            <div><strong className="text-slate-400">Original ({result.report.raw_location ? "Spoken" : "Audio"}):</strong> {result.transcript}</div>
+          <div className="text-[11px] text-slate-300 bg-slate-950/80 p-2.5 rounded border border-slate-800">
+            <div>
+              <strong className="text-slate-400">Transcript:</strong> {result.transcript}
+            </div>
             {result.transcript_english && result.transcript_english !== result.transcript && (
-              <div className="mt-1 text-slate-300"><strong className="text-blue-400">English:</strong> {result.transcript_english}</div>
+              <div className="mt-1">
+                <strong className="text-blue-400">English:</strong> {result.transcript_english}
+              </div>
             )}
           </div>
-          <button onClick={() => { setState("idle"); setTextInput(""); setResult(null); }} className="mt-4 w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-md text-xs transition-colors">New Report</button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setState("idle");
+              setTextInput("");
+              setResult(null);
+            }}
+            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg text-xs transition-colors cursor-pointer"
+          >
+            Record Another Report
+          </button>
         </div>
       )}
     </div>

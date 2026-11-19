@@ -19,6 +19,7 @@ export function DashboardClient() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [mapFilterCategory, setMapFilterCategory] = useState<string>("all");
   const [mapFilterMinSeverity, setMapFilterMinSeverity] = useState<number>(0);
+  const [mapFilterAction, setMapFilterAction] = useState<string>("all");
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return window.innerWidth >= 768;
@@ -91,7 +92,29 @@ export function DashboardClient() {
 
   const [auditResult, setAuditResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [isAuditing, setIsAuditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"map" | "early_warning" | "mitigation">("map");
+  const [activeTab, setActiveTab] = useState<"map" | "early_warning" | "mitigation">(() => {
+    if (typeof window !== "undefined") {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "early_warning" || tab === "early-warning") return "early_warning";
+      if (tab === "mitigation") return "mitigation";
+    }
+    return "map";
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "early_warning" || tab === "early-warning") {
+        setActiveTab("early_warning");
+      } else if (tab === "mitigation") {
+        setActiveTab("mitigation");
+      } else {
+        setActiveTab("map");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<{
     reachable: boolean;
@@ -129,7 +152,6 @@ export function DashboardClient() {
   const runAudit = async () => {
     setIsAuditing(true);
     try {
-      // Server runs bounded SQL query when reports array is omitted
       const res = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,199 +166,264 @@ export function DashboardClient() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-full bg-slate-900 text-slate-100 overflow-x-hidden overflow-y-hidden">
-      <header className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2 shrink-0">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-red-500">SafaiKavach</h1>
-          <p className="text-xs sm:text-sm text-slate-400">Hear the hazard before it hurts.</p>
+    <div className="flex flex-col h-screen w-full max-w-full bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      {/* Primary Command Centre Header */}
+      <header className="px-4 py-2.5 bg-slate-950 border-b border-slate-800/90 flex flex-wrap justify-between items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/40 flex items-center justify-center font-black text-red-500 text-sm">
+            SK
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-100">SafaiKavach</h1>
+              <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded bg-slate-800 border border-slate-700 text-slate-400">
+                Command Centre
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">Municipal Hazard Intelligence & Fleet Operations</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+
+        {/* Tab Navigation Centered in Top Command Header */}
+        <nav aria-label="Dashboard Views" className="bg-slate-900/90 border border-slate-800 rounded-lg p-1 flex gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("map")}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "map"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+            }`}
+          >
+            <span>Live Incident Map</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-950 text-blue-200 border border-blue-800/80 font-mono">
+              {Math.min(reports.length, 300)}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("early_warning")}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "early_warning"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+            }`}
+          >
+            <span>Early Warning</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-amber-300 border border-slate-700 font-mono">
+              4W
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("mitigation")}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "mitigation"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+            }`}
+          >
+            <span>Mitigation Strategy</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-200 border border-emerald-800/80 font-mono">
+              7D
+            </span>
+          </button>
+        </nav>
+
+        {/* Global Controls & System Health */}
+        <div className="flex items-center gap-2 flex-wrap">
           {healthStatus && (
-            <div className={`text-xs px-3 py-1.5 rounded-full border font-mono flex items-center gap-2 ${
-              healthStatus.reachable
-                ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
-                : "bg-red-950/60 border-red-800 text-red-300"
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${healthStatus.reachable ? "bg-emerald-400" : "bg-red-500 animate-pulse"}`} />
+            <div
+              className={`text-[11px] px-2.5 py-1 rounded-md border font-mono flex items-center gap-1.5 ${
+                healthStatus.reachable
+                  ? "bg-emerald-950/40 border-emerald-800/70 text-emerald-300"
+                  : "bg-red-950/60 border-red-800 text-red-300"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  healthStatus.reachable ? "bg-emerald-400" : "bg-red-500 animate-pulse"
+                }`}
+              />
               {healthStatus.reachable
-                ? `Database connected, ${healthStatus.wardCount} wards, ${healthStatus.reportCount} reports (synthetic)`
-                : "Database unreachable"}
+                ? `DB: ${healthStatus.wardCount} wards (${healthStatus.reportCount} reports)`
+                : "Database offline"}
             </div>
           )}
 
           {healthStatus?.demoResetEnabled && (
             <button
+              type="button"
               onClick={loadDemoData}
               disabled={isResetting}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-xs font-medium transition-colors"
+              className="px-2.5 py-1 bg-blue-600/80 hover:bg-blue-600 border border-blue-500/50 disabled:opacity-50 rounded text-xs font-medium transition-colors text-white cursor-pointer"
             >
-              {isResetting ? "Resetting Demo..." : "Reset demo data"}
+              {isResetting ? "Resetting..." : "Reset Demo Data"}
             </button>
           )}
 
           <button
+            type="button"
+            onClick={resetView}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 rounded text-xs font-medium transition-colors text-slate-300 border border-slate-800 cursor-pointer"
+            title="Reset active map filters"
+          >
+            Reset Filters
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-200 border border-slate-700 flex items-center gap-1.5"
-            title={isSidebarOpen ? "Collapse reporting panel" : "Expand reporting panel"}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 rounded text-xs font-medium transition-colors text-slate-200 border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+            title={isSidebarOpen ? "Collapse reporting sidebar" : "Expand reporting sidebar"}
           >
             <span className="font-mono text-slate-400">{isSidebarOpen ? "<<" : ">>"}</span>
             <span>{isSidebarOpen ? "Hide Reporter" : "Show Reporter"}</span>
           </button>
-
-          <button
-            onClick={resetView}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-300 border border-slate-700"
-            title="Reset local filter view"
-          >
-            Reset View
-          </button>
         </div>
       </header>
 
-      <div className="flex flex-col md:flex-row flex-1 min-h-0 md:h-full h-auto overflow-y-auto md:overflow-hidden">
+      {/* Main Command Workspace */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 md:h-full h-auto overflow-y-auto md:overflow-hidden relative">
+        {/* Collapsible Left Incident Reporter & Recent Stream */}
         {isSidebarOpen && (
-          <div className="w-full md:w-[380px] max-w-full flex flex-col border-r border-slate-800 bg-slate-900 md:overflow-y-auto p-4 gap-4 shrink-0 overflow-x-hidden">
-            <div className="border-b border-slate-800 shrink-0 pb-4">
+          <aside aria-label="Incident Reporter" className="w-full md:w-[380px] max-w-full flex flex-col border-r border-slate-800/80 bg-slate-900/95 md:overflow-y-auto p-3.5 gap-4 shrink-0 overflow-x-hidden">
+            <div className="border-b border-slate-800/80 shrink-0 pb-3">
               <VoiceReporter />
             </div>
 
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold mb-4 text-slate-200">Recent Reports</h2>
-              <div className="space-y-3">
-              {reports.map((r) => (
-                <div
-                  key={r.report_id}
-                  className={`p-3 rounded border cursor-pointer transition-colors ${
-                    selectedReportId === r.report_id
-                      ? "bg-slate-800 border-red-500"
-                      : "bg-slate-950 border-slate-800 hover:border-slate-600"
-                  }`}
-                  onClick={() => setSelectedReportId(r.report_id)}
-                >
-                  <div className="flex justify-between items-start gap-1">
-                    <span className="font-mono text-xs text-slate-400">{r.report_id}</span>
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {(() => {
-                        const badge = getDispatchBadge(r.action_required);
-                        const toneClasses =
-                          badge.tone === "danger"
-                            ? "bg-red-950/80 border border-red-800 text-red-300"
-                            : badge.tone === "warning"
-                            ? "bg-amber-950/80 border border-amber-800 text-amber-300"
-                            : "bg-slate-800 border border-slate-700 text-slate-300";
-                        return (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold tracking-wide ${toneClasses}`}>
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">Recent Incident Stream</h3>
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  {reports.length} loaded
+                </span>
+              </div>
+
+              <div className="space-y-2.5 overflow-y-auto pr-1">
+                {reports.map((r) => {
+                  const isSelected = selectedReportId === r.report_id;
+                  const badge = getDispatchBadge(r.action_required);
+                  const toneClasses =
+                    badge.tone === "danger"
+                      ? "bg-red-950/80 border border-red-800 text-red-300"
+                      : badge.tone === "warning"
+                      ? "bg-amber-950/80 border border-amber-800 text-amber-300"
+                      : "bg-slate-800 border border-slate-700 text-slate-300";
+
+                  return (
+                    <div
+                      key={r.report_id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        isSelected
+                          ? "bg-slate-800/90 border-blue-500 shadow-md shadow-blue-950/30"
+                          : "bg-slate-950/70 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950"
+                      }`}
+                      onClick={() => setSelectedReportId(r.report_id)}
+                    >
+                      <div className="flex justify-between items-start gap-1">
+                        <span className="font-mono text-[11px] font-semibold text-slate-400">{r.report_id}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold tracking-wide ${toneClasses}`}>
                             {badge.label}
                           </span>
-                        );
-                      })()}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded ${
-                          r.severity_level >= 7 ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                        }`}
-                      >
-                        Sev {r.severity_level}
-                      </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                              r.severity_level >= 7
+                                ? "bg-red-500/20 text-red-400 border-red-500/30"
+                                : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                            }`}
+                          >
+                            Sev {r.severity_level}
+                          </span>
+                        </div>
+                      </div>
+
+                      <h4 className="font-semibold text-xs mt-1.5 text-slate-100 truncate">
+                        {humanizeCategory(r.hazard_category)}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{r.raw_location}</p>
+
+                      {!r.coordinates && (
+                        <span className="text-[9px] bg-red-950/70 text-red-400 border border-red-900/60 px-1.5 py-0.2 rounded mt-1.5 inline-block">
+                          Location unmapped
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <h3 className="font-medium mt-1 truncate">{humanizeCategory(r.hazard_category)}</h3>
-                  <p className="text-sm text-slate-500 truncate">{r.raw_location}</p>
-                  {!r.coordinates && (
-                    <span className="text-[10px] bg-red-900/50 text-red-300 px-1.5 py-0.5 rounded mt-1 inline-block">
-                      Location not resolved
-                    </span>
-                  )}
-                </div>
-              ))}
-              {reports.length === 0 && <div className="text-center text-slate-500 text-sm py-8">No reports yet</div>}
-              {hasMore && reports.length > 0 && (
-                <button
-                  onClick={handleLoadMore}
-                  disabled={isLoadingMore}
-                  className="w-full mt-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded text-xs font-medium border border-slate-700 transition-colors"
-                >
-                  {isLoadingMore ? "Loading more..." : "Load more"}
-                </button>
-              )}
+                  );
+                })}
+
+                {reports.length === 0 && (
+                  <div className="text-center text-slate-500 text-xs py-8">No incident reports recorded yet</div>
+                )}
+
+                {hasMore && reports.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={isLoadingMore}
+                    className="w-full mt-2 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-slate-300 rounded-lg text-xs font-medium border border-slate-800 transition-colors cursor-pointer"
+                  >
+                    {isLoadingMore ? "Loading more incidents..." : "Load next 50 incidents"}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          </aside>
         )}
 
-        <div className="flex-1 flex flex-col bg-slate-800 min-h-[500px] md:min-h-0 relative">
-          <div className="bg-slate-950 border-b border-amber-900/60 px-4 py-2 text-xs text-amber-200 text-center leading-relaxed shrink-0">
-            {DATA_DISCLOSURE_TEXT}
-          </div>
-          <div className="bg-slate-900 border-b border-slate-700 p-2 flex justify-center shrink-0">
-            <div className="bg-slate-950 rounded-full border border-slate-800 p-1 flex gap-1">
-              <button
-                onClick={() => setActiveTab("map")}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  activeTab === "map" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Live Map
-              </button>
-              <button
-                onClick={() => setActiveTab("early_warning")}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  activeTab === "early_warning" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Early Warning
-              </button>
-              <button
-                onClick={() => setActiveTab("mitigation")}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  activeTab === "mitigation" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Mitigation Strategy
-              </button>
-            </div>
-          </div>
-
+        {/* Primary View Pane (Live Map / Early Warning / Mitigation) */}
+        <main aria-label="Main Command Center View" className="flex-1 flex flex-col bg-slate-900 min-h-[500px] md:min-h-0 relative overflow-hidden">
+          {/* TAB 1: LIVE MAP */}
           <div className={`flex flex-col h-full ${activeTab === "map" ? "flex" : "hidden"}`}>
-            {/* Header stats: single emphasis color (High Sev), rest neutral slate */}
-            <div className="flex p-3 bg-slate-950 gap-4 text-xs sm:text-sm border-b border-slate-800 shrink-0 flex-wrap items-center text-slate-400">
-              <div>
-                Total: <span className="font-semibold text-slate-200">{total}</span>
+            {/* Command Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-2.5 bg-slate-950 border-b border-slate-800/80 shrink-0 text-xs text-slate-400">
+              <div className="bg-slate-900/80 border border-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Total Reports</span>
+                <span className="text-base font-bold text-slate-100">{total}</span>
               </div>
-              <div className="bg-red-950/40 border border-red-900/60 px-2 py-0.5 rounded">
-                High Sev: <span className="font-bold text-red-400">{highSev}</span>
+              <div className="bg-slate-900/80 border border-red-950/70 p-2 rounded-lg">
+                <span className="text-[10px] text-red-400 block uppercase font-mono">High Severity</span>
+                <span className="text-base font-bold text-red-400">{highSev}</span>
               </div>
-              <div>
-                Avg Sev: <span className="font-semibold text-slate-200">{avgSev}</span>
+              <div className="bg-slate-900/80 border border-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Avg Severity</span>
+                <span className="text-base font-bold text-slate-200">{avgSev} / 10</span>
               </div>
-              <div>
-                Hazmat: <span className="font-semibold text-slate-200">{hazmat}</span>
+              <div className="bg-slate-900/80 border border-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Hazmat Actions</span>
+                <span className="text-base font-bold text-slate-200">{hazmat}</span>
               </div>
               <div
-                title="Illustrative estimate. Each non-routine report is assumed to avoid one incident of a fixed cost per category, scaled by severity/10. Not measured savings. Based on synthetic data."
-                className="cursor-help border-b border-dashed border-slate-600"
+                title="Illustrative estimate. Scaled by severity/10. Not measured savings. Based on synthetic data."
+                className="bg-slate-900/80 border border-slate-800/80 p-2 rounded-lg cursor-help col-span-2 sm:col-span-1 lg:col-span-1"
               >
-                Est. prevented: <span className="font-semibold text-slate-200">₹{totalNetInr.toLocaleString()}</span>
+                <span className="text-[10px] text-slate-500 block uppercase font-mono truncate">Est. Prevented</span>
+                <span className="text-sm font-bold text-emerald-400 truncate block">₹{totalNetInr.toLocaleString()}</span>
               </div>
-
-              <button
-                onClick={runAudit}
-                disabled={isAuditing}
-                className="ml-auto bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1 rounded text-xs font-semibold shadow transition-colors flex items-center"
-              >
-                {isAuditing ? "Auditing..." : "Run Weekly Audit"}
-              </button>
+              <div className="col-span-2 sm:col-span-1 lg:col-span-1 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={runAudit}
+                  disabled={isAuditing}
+                  className="w-full h-full py-2 bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/60 rounded-lg text-xs font-semibold shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  <span>{isAuditing ? "Auditing..." : "Run Weekly Audit"}</span>
+                </button>
+              </div>
             </div>
 
-            {/* In-memory filters for loaded markers */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-xs">
+            {/* In-Memory Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-950/90 border-b border-slate-800/80 text-xs shrink-0">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <label htmlFor="map-filter-cat" className="text-slate-400 font-medium">Category:</label>
+                  <label htmlFor="map-filter-cat" className="text-slate-400 text-[11px] font-medium">Category:</label>
                   <select
                     id="map-filter-cat"
                     value={mapFilterCategory}
                     onChange={(e) => setMapFilterCategory(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-slate-500"
+                    className="bg-slate-900 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500"
                   >
                     <option value="all">All Categories</option>
                     {ALL_HAZARD_CATEGORIES.map((cat) => (
@@ -348,14 +435,14 @@ export function DashboardClient() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <label htmlFor="map-filter-sev" className="text-slate-400 font-medium">Min Severity:</label>
+                  <label htmlFor="map-filter-sev" className="text-slate-400 text-[11px] font-medium">Min Severity:</label>
                   <select
                     id="map-filter-sev"
                     value={mapFilterMinSeverity}
                     onChange={(e) => setMapFilterMinSeverity(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-slate-500"
+                    className="bg-slate-900 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500"
                   >
-                    <option value={0}>All Severities (0+)</option>
+                    <option value={0}>All (0+)</option>
                     <option value={3}>Low+ (3+)</option>
                     <option value={5}>Moderate+ (5+)</option>
                     <option value={7}>High+ (7+)</option>
@@ -363,29 +450,48 @@ export function DashboardClient() {
                   </select>
                 </div>
 
-                {(mapFilterCategory !== "all" || mapFilterMinSeverity > 0) && (
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="map-filter-act" className="text-slate-400 text-[11px] font-medium">Action:</label>
+                  <select
+                    id="map-filter-act"
+                    value={mapFilterAction}
+                    onChange={(e) => setMapFilterAction(e.target.value)}
+                    className="bg-slate-900 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="all">All Actions</option>
+                    <option value="hazmat">Hazmat Bypass</option>
+                    <option value="bypass">Standard Bypass</option>
+                    <option value="routine">Routine Collection</option>
+                  </select>
+                </div>
+
+                {(mapFilterCategory !== "all" || mapFilterMinSeverity > 0 || mapFilterAction !== "all") && (
                   <button
+                    type="button"
                     onClick={() => {
                       setMapFilterCategory("all");
                       setMapFilterMinSeverity(0);
+                      setMapFilterAction("all");
                     }}
-                    className="text-slate-400 hover:text-slate-200 underline text-xs ml-1"
+                    className="text-slate-400 hover:text-slate-200 underline text-[11px] cursor-pointer"
                   >
-                    Reset filters
+                    Clear filters
                   </button>
                 )}
               </div>
 
-              <div className="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                Filters apply to loaded markers only
+              <div className="text-[10px] text-amber-300/80 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+                Filters apply only to loaded markers
               </div>
             </div>
 
+            {/* Map Container */}
             <div className="flex-1 relative z-0">
               {!isSidebarOpen && (
                 <button
+                  type="button"
                   onClick={() => setIsSidebarOpen(true)}
-                  className="absolute top-16 left-4 z-[450] bg-slate-900/95 hover:bg-slate-800 text-slate-200 text-xs px-2.5 py-1.5 rounded-md border border-slate-700 shadow-lg flex items-center gap-1.5 transition-colors"
+                  className="absolute top-16 left-3 z-[450] bg-slate-950/90 hover:bg-slate-900 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 shadow-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                   title="Open reporting panel"
                 >
                   <span className="font-mono text-slate-400">&gt;&gt;</span>
@@ -402,41 +508,37 @@ export function DashboardClient() {
                 totalReportCount={total}
                 filterCategory={mapFilterCategory}
                 filterMinSeverity={mapFilterMinSeverity}
+                filterAction={mapFilterAction}
               />
 
+              {/* Weekly Audit Modal Overlay */}
               {auditResult && auditResult.status === "success" && (
-                <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-purple-500 max-w-sm">
-                  <h3 className="font-bold text-purple-400 mb-2 flex items-center justify-between">
-                    Weekly Root-Cause Audit
+                <div className="absolute top-3 left-3 z-[500] bg-slate-950/95 backdrop-blur p-4 rounded-xl shadow-2xl border border-purple-500/80 max-w-sm text-xs space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h4 className="font-bold text-purple-400 flex items-center gap-1.5 text-xs">
+                      <span>Weekly Root-Cause Audit</span>
+                    </h4>
                     {auditResult.source === "template_fallback" ? (
-                      <span className="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded ml-2">
-                        Template text, LLM unavailable
+                      <span className="text-[9px] bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.2 rounded font-mono">
+                        Template Fallback
                       </span>
                     ) : (
-                      <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">
-                        AI-generated; verify on site
+                      <span className="text-[9px] bg-purple-950 text-purple-200 border border-purple-800 px-1.5 py-0.2 rounded font-mono">
+                        AI Hypothesis
                       </span>
                     )}
-                  </h3>
-                  <div className="space-y-2 text-sm text-slate-300">
-                    {auditResult.model && (
-                      <p className="text-xs text-slate-400">
-                        <strong className="text-slate-300">Model:</strong>{" "}
-                        {auditResult.model === "openrouter/free" && auditResult.servedModel && !auditResult.model.includes("served by")
-                          ? `${auditResult.model} (served by ${auditResult.servedModel})`
-                          : (auditResult.model as string)}
-                      </p>
-                    )}
+                  </div>
+                  <div className="space-y-1.5 text-slate-300 text-[11px]">
                     <p>
                       <strong className="text-slate-100">Ward:</strong> {auditResult.ward as string}{" "}
                       <span className="text-red-400">(+{auditResult.pct_increase as number}% anomaly)</span>
                     </p>
                     <p>
-                      <strong className="text-slate-100">Dominant Anomaly:</strong>{" "}
+                      <strong className="text-slate-100">Dominant Category:</strong>{" "}
                       {humanizeCategory(auditResult.dominant_anomaly as string)}
                     </p>
                     <p>
-                      <strong className="text-slate-100">Possible cause (hypothesis):</strong> {auditResult.root_cause as string}
+                      <strong className="text-slate-100">Possible Cause:</strong> {auditResult.root_cause as string}
                     </p>
                     <p>
                       <strong className="text-slate-100">Recommended Action:</strong>{" "}
@@ -444,22 +546,24 @@ export function DashboardClient() {
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setAuditResult(null)}
-                    className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs"
+                    className="w-full bg-slate-900 hover:bg-slate-800 py-1.5 rounded text-[11px] text-slate-300 font-medium border border-slate-700 transition-colors cursor-pointer"
                   >
-                    Dismiss
+                    Dismiss Audit Summary
                   </button>
                 </div>
               )}
 
               {auditResult && auditResult.status === "insufficient_data" && (
-                <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-slate-500">
-                  <p className="text-sm text-slate-300">
-                    Insufficient data for weekly audit (needs &gt;= 3 reports of same category in a ward this week).
+                <div className="absolute top-3 left-3 z-[500] bg-slate-950/95 p-3 rounded-lg shadow-xl border border-slate-700 text-xs max-w-xs space-y-2">
+                  <p className="text-slate-300 text-[11px]">
+                    Insufficient incident volume for weekly audit. Requires at least 3 reports of the same category in a ward this week.
                   </p>
                   <button
+                    type="button"
                     onClick={() => setAuditResult(null)}
-                    className="mt-3 w-full bg-slate-700 hover:bg-slate-600 py-1 rounded text-xs"
+                    className="w-full bg-slate-900 hover:bg-slate-800 py-1 rounded text-xs text-slate-300 border border-slate-700 cursor-pointer"
                   >
                     Dismiss
                   </button>
@@ -468,10 +572,20 @@ export function DashboardClient() {
             </div>
           </div>
 
-          {activeTab === "early_warning" && <EarlyWarningPanel reports={reports} onSelectWard={handleSelectWard} />}
+          {/* TAB 2: EARLY WARNING */}
+          {activeTab === "early_warning" && (
+            <EarlyWarningPanel reports={reports} onSelectWard={handleSelectWard} />
+          )}
+
+          {/* TAB 3: MITIGATION STRATEGY */}
           {activeTab === "mitigation" && <MitigationPlanPanel />}
-        </div>
+        </main>
       </div>
+
+      {/* Synthetic Data Disclaimer Footer: Relocated cleanly to the bottom of the first screen */}
+      <footer className="px-4 py-2 bg-slate-950 border-t border-slate-900 text-[11px] text-amber-300/90 text-center shrink-0 tracking-wide">
+        {DATA_DISCLOSURE_TEXT}
+      </footer>
     </div>
   );
 }
