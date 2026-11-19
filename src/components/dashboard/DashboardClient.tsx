@@ -9,6 +9,7 @@ import { MitigationPlanPanel } from "@/components/dashboard/MitigationPlanPanel"
 import { estimateImpact } from "@/lib/finance/impact";
 import { humanizeCategory } from "@/lib/utils/format";
 import { getDispatchBadge } from "@/lib/dispatch";
+import { DATA_DISCLOSURE_TEXT } from "@/lib/dataDisclosure";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then((m) => m.HazardMap), { ssr: false });
 
@@ -149,7 +150,7 @@ export function DashboardClient() {
             }`}>
               <span className={`w-2 h-2 rounded-full ${healthStatus.reachable ? "bg-emerald-400" : "bg-red-500 animate-pulse"}`} />
               {healthStatus.reachable
-                ? `Database connected, ${healthStatus.wardCount} wards, ${healthStatus.reportCount} reports`
+                ? `Database connected, ${healthStatus.wardCount} wards, ${healthStatus.reportCount} reports (synthetic)`
                 : "Database unreachable"}
             </div>
           )}
@@ -243,6 +244,9 @@ export function DashboardClient() {
         </div>
 
         <div className="flex-1 flex flex-col bg-slate-800 min-h-[500px] md:min-h-0 relative">
+          <div className="bg-slate-950 border-b border-amber-900/60 px-4 py-2 text-xs text-amber-200 text-center leading-relaxed shrink-0">
+            {DATA_DISCLOSURE_TEXT}
+          </div>
           <div className="bg-slate-900 border-b border-slate-700 p-2 flex justify-center shrink-0">
             <div className="bg-slate-950 rounded-full border border-slate-800 p-1 flex gap-1">
               <button

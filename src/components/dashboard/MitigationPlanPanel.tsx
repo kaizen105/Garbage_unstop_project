@@ -61,7 +61,7 @@ export function MitigationPlanPanel() {
         <div>
           <h2 className="text-xl font-bold text-emerald-400">7-Day Municipal Mitigation Strategy</h2>
           <p className="text-sm text-slate-400">
-            Automated intelligence & grounded dispatch strategy across 290 Delhi MCD wards.
+            Automated intelligence and grounded dispatch strategy across 290 Delhi MCD ward boundaries (synthetic incident data).
           </p>
         </div>
         <div className="flex gap-2">
