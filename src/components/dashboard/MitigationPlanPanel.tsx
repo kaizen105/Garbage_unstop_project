@@ -123,6 +123,12 @@ export function MitigationPlanPanel() {
             )}
           </div>
 
+          {data.asOf && (
+            <div className="text-xs text-slate-500 -mt-2">
+              Data as of {new Date(data.asOf).toLocaleString()}
+            </div>
+          )}
+
           {data.status === "no_data" && (
             <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-400">
               No reports recorded in the last 7 days.

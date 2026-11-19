@@ -18,6 +18,11 @@ vi.mock("@/lib/audit/dbAnomaly", () => ({
   findLargestAnomalyFromDb: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@/lib/asOf", () => ({
+  getAsOf: vi.fn().mockResolvedValue(new Date("2026-11-17T00:00:00.000Z")),
+  computeWindowEnd: vi.fn((asOf: Date) => new Date(asOf.getTime() + 1000)),
+}));
+
 describe("POST /api/audit input validation", () => {
   it("rejects malformed non-empty JSON with HTTP 400", async () => {
     const req = new Request("http://localhost/api/audit", {

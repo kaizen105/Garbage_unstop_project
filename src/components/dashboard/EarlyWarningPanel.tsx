@@ -103,6 +103,11 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
 
   return (
     <div className="flex-1 bg-slate-900 overflow-y-auto p-6 flex flex-col gap-6">
+      {serverData?.asOf && (
+        <div className="text-xs text-slate-500 -mb-2">
+          Data as of {new Date(serverData.asOf).toLocaleString()}
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
           <div className="text-slate-400 text-sm">Wards on Watch</div>

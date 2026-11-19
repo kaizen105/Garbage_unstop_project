@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { runAudit, runAuditFromCluster } from "@/lib/audit/audit";
 import { findLargestAnomalyFromDb } from "@/lib/audit/dbAnomaly";
+import { getAsOf } from "@/lib/asOf";
 import { z } from "zod";
 import { tagWard } from "@/lib/spatial/wards";
 
@@ -56,7 +57,8 @@ export async function POST(request: Request) {
     }
 
     // Default bounded SQL path when body has no reports: queries DB directly
-    const cluster = await findLargestAnomalyFromDb(new Date());
+    const asOf = await getAsOf();
+    const cluster = await findLargestAnomalyFromDb(asOf);
     const result = await runAuditFromCluster(cluster);
     return NextResponse.json(result);
   } catch (error: unknown) {

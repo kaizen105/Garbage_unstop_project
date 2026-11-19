@@ -19,6 +19,7 @@ export interface WardCategoryAggregate {
 export interface WeeklyAggregates {
   windowStart: string; // ISO string
   windowEnd: string;   // ISO string
+  asOf?: string;       // ISO string
   totals: {
     current7: number;
     previous7: number;

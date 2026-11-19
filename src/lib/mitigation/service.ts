@@ -6,11 +6,13 @@ import { groundPlan } from "./ground";
 import { GroundedMitigationPlan } from "./schema";
 import { WeeklyAggregates } from "./types";
 import { Prisma } from "@prisma/client";
+import { getAsOf } from "@/lib/asOf";
 
 export interface GeneratePlanResult {
   status: "ok" | "no_data" | "degraded";
   plan?: GroundedMitigationPlan;
   aggregates?: WeeklyAggregates;
+  asOf?: string;
   generatedAt: string;
   cached: boolean;
   stale?: boolean;
@@ -23,6 +25,7 @@ export const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
 export async function generateWeeklyPlan(options?: { force?: boolean }): Promise<GeneratePlanResult> {
   const now = new Date();
+  const asOf = await getAsOf();
 
   // 1. Check cache unless force is requested
   if (!options?.force) {
@@ -31,10 +34,12 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
     });
 
     if (latest && now.getTime() - latest.createdAt.getTime() < CACHE_TTL_MS) {
+      const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
       return {
         status: "ok",
         plan: latest.planJson as unknown as GroundedMitigationPlan,
-        aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
+        aggregates,
+        asOf: aggregates?.asOf ?? asOf.toISOString(),
         generatedAt: latest.createdAt.toISOString(),
         cached: true,
         includesSynthetic: latest.includesSynthetic,
@@ -43,12 +48,14 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
     }
   }
 
-  // 2. Compute weekly aggregates
-  const aggregates = await getWeeklyAggregates(now);
+  // 2. Compute weekly aggregates using getAsOf() for windows
+  // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
+  const aggregates = await getWeeklyAggregates(asOf);
   if (aggregates.totals.current7 === 0 || aggregates.rows.length === 0) {
     return {
       status: "no_data",
       aggregates,
+      asOf: asOf.toISOString(),
       generatedAt: now.toISOString(),
       cached: false,
       includesSynthetic: aggregates.totals.synthetic7 > 0,
@@ -77,6 +84,7 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
       status: "ok",
       plan: grounded,
       aggregates,
+      asOf: asOf.toISOString(),
       generatedAt: saved.createdAt.toISOString(),
       cached: false,
       includesSynthetic: saved.includesSynthetic,
@@ -87,6 +95,7 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
     return {
       status: "degraded",
       aggregates,
+      asOf: asOf.toISOString(),
       generatedAt: now.toISOString(),
       cached: false,
       includesSynthetic: aggregates.totals.synthetic7 > 0,
@@ -108,10 +117,12 @@ export async function getFreshCachedPlan(ttlMs: number = CACHE_TTL_MS): Promise<
 
   const now = new Date();
   if (now.getTime() - latest.createdAt.getTime() < ttlMs) {
+    const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
     return {
       status: "ok",
       plan: latest.planJson as unknown as GroundedMitigationPlan,
-      aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
+      aggregates,
+      asOf: aggregates?.asOf,
       generatedAt: latest.createdAt.toISOString(),
       cached: true,
       includesSynthetic: latest.includesSynthetic,
@@ -137,10 +148,12 @@ export async function getLatestCachedPlan(options?: { stale?: boolean }): Promis
     };
   }
 
+  const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
   return {
     status: "ok",
     plan: latest.planJson as unknown as GroundedMitigationPlan,
-    aggregates: latest.aggregatesJson as unknown as WeeklyAggregates,
+    aggregates,
+    asOf: aggregates?.asOf,
     generatedAt: latest.createdAt.toISOString(),
     cached: true,
     ...(options?.stale ? { stale: true } : {}),

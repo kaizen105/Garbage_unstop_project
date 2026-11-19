@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import type { AnomalyCluster } from "./audit";
+import { getAsOf, computeWindowEnd } from "@/lib/asOf";
 
 interface SqlAnomalyRow {
   ward_name: string;
@@ -20,26 +21,29 @@ interface SqlAnomalyRow {
  * Groups by COALESCE(w."name", r."rawLocation") and r."hazardCategory".
  * Considers reports in the last 14 days without loading 10,000 rows into memory.
  */
-export async function findLargestAnomalyFromDb(now: Date = new Date()): Promise<AnomalyCluster | null> {
+export async function findLargestAnomalyFromDb(asOfInput?: Date): Promise<AnomalyCluster | null> {
+  // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
+  const asOf = asOfInput ?? (await getAsOf());
+  const windowEnd = computeWindowEnd(asOf); // asOf plus 1 second
   const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
-  const thisWeekStart = new Date(now.getTime() - ONE_WEEK);
-  const prevWeekStart = new Date(now.getTime() - 2 * ONE_WEEK);
+  const thisWeekStart = new Date(windowEnd.getTime() - ONE_WEEK);
+  const prevWeekStart = new Date(windowEnd.getTime() - 2 * ONE_WEEK);
 
   const rows = await prisma.$queryRaw<SqlAnomalyRow[]>(Prisma.sql`
     WITH ward_category_counts AS (
       SELECT
         COALESCE(w."name", r."rawLocation") AS ward_name,
         r."hazardCategory" AS hazard_category,
-        COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${now} THEN 1 END)::int AS this_week,
+        COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} THEN 1 END)::int AS this_week,
         COUNT(CASE WHEN r."createdAt" >= ${prevWeekStart} AND r."createdAt" < ${thisWeekStart} THEN 1 END)::int AS prev_week,
-        AVG(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${now} AND r."lat" IS NOT NULL THEN r."lat" END)::float8 AS avg_lat,
-        AVG(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${now} AND r."lng" IS NOT NULL THEN r."lng" END)::float8 AS avg_lng,
-        COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${now} AND r."lat" IS NOT NULL AND r."lng" IS NOT NULL THEN 1 END)::int AS geo_count
+        AVG(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} AND r."lat" IS NOT NULL THEN r."lat" END)::float8 AS avg_lat,
+        AVG(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} AND r."lng" IS NOT NULL THEN r."lng" END)::float8 AS avg_lng,
+        COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} AND r."lat" IS NOT NULL AND r."lng" IS NOT NULL THEN 1 END)::int AS geo_count
       FROM "Report" r
       LEFT JOIN "Ward" w ON r."wardId" = w."id"
-      WHERE r."createdAt" >= ${prevWeekStart} AND r."createdAt" < ${now}
+      WHERE r."createdAt" >= ${prevWeekStart} AND r."createdAt" < ${windowEnd}
       GROUP BY COALESCE(w."name", r."rawLocation"), r."hazardCategory"
-      HAVING COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${now} THEN 1 END) >= 3
+      HAVING COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} THEN 1 END) >= 3
     )
     SELECT
       ward_name,

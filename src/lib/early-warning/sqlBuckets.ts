@@ -5,6 +5,7 @@ import type { WardBucket, HotspotRanking } from "./trends";
 import { rankHotspots } from "./trends";
 import * as turf from "@turf/turf";
 import landmarks from "../../../data/delhi_landmarks.json";
+import { getAsOf, computeWindowEnd } from "@/lib/asOf";
 
 export interface SqlBucketRow {
   ward_name: string;
@@ -27,6 +28,7 @@ export interface EarlyWarningResponse {
   hotspots: HotspotRanking[];
   citywide: CitywideWeekData[];
   wardCounts: Record<string, number>;
+  asOf: string;
 }
 
 /**
@@ -110,12 +112,14 @@ export function computeCitywideTrendFromBuckets(
  * Executes SQL aggregation over the 28-day window grouped by ward and category.
  * Grouping is strictly COALESCE(w."name", r."rawLocation"), r."hazardCategory".
  */
-export async function getEarlyWarningSqlBuckets(now: Date = new Date()): Promise<SqlBucketRow[]> {
-  const windowEnd = now;
-  const w0Start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const w1Start = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const w2Start = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-  const w3Start = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+export async function getEarlyWarningSqlBuckets(asOfInput?: Date): Promise<SqlBucketRow[]> {
+  // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
+  const asOf = asOfInput ?? (await getAsOf());
+  const windowEnd = computeWindowEnd(asOf); // asOf plus 1 second
+  const w0Start = new Date(windowEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const w1Start = new Date(windowEnd.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const w2Start = new Date(windowEnd.getTime() - 21 * 24 * 60 * 60 * 1000);
+  const w3Start = new Date(windowEnd.getTime() - 28 * 24 * 60 * 60 * 1000);
 
   const rawRows = await prisma.$queryRaw<SqlBucketRow[]>(Prisma.sql`
     SELECT
@@ -143,10 +147,10 @@ export async function getEarlyWarningSqlBuckets(now: Date = new Date()): Promise
  */
 export async function attachLandmarksToHotspots(
   hotspots: HotspotRanking[],
-  now: Date
+  asOf: Date
 ): Promise<HotspotRanking[]> {
-  const w0Start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const windowEnd = now;
+  const windowEnd = computeWindowEnd(asOf);
+  const w0Start = new Date(windowEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const enriched: HotspotRanking[] = [];
 
@@ -207,10 +211,11 @@ export async function attachLandmarksToHotspots(
 
 /**
  * End-to-end server function to compute Early Warning data using SQL buckets
- * and a shared "now" reference across all windows.
+ * and a shared "asOf" reference across all windows.
  */
-export async function getEarlyWarningData(now: Date = new Date()): Promise<EarlyWarningResponse> {
-  const sqlRows = await getEarlyWarningSqlBuckets(now);
+export async function getEarlyWarningData(asOfInput?: Date): Promise<EarlyWarningResponse> {
+  const asOf = asOfInput ?? (await getAsOf());
+  const sqlRows = await getEarlyWarningSqlBuckets(asOf);
   const buckets = convertSqlBucketsToWardBuckets(sqlRows);
   const citywide = computeCitywideTrendFromBuckets(sqlRows);
 
@@ -221,14 +226,15 @@ export async function getEarlyWarningData(now: Date = new Date()): Promise<Early
   }
 
   // Rank hotspots from bucket rows
-  const ranked = rankHotspots(buckets, now.getTime(), 5);
+  const ranked = rankHotspots(buckets, asOf.getTime(), 5);
 
   // Attach landmark via bounded query (only top hotspots, max 3 reports per ward)
-  const hotspots = await attachLandmarksToHotspots(ranked, now);
+  const hotspots = await attachLandmarksToHotspots(ranked, asOf);
 
   return {
     hotspots,
     citywide,
     wardCounts,
+    asOf: asOf.toISOString(),
   };
 }

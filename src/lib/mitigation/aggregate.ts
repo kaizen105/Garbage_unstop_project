@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma, HazardCategory } from "@prisma/client";
 import { WeeklyAggregates, WardCategoryAggregate } from "./types";
+import { getAsOf, computeWindowEnd } from "@/lib/asOf";
 
 interface AggregateRawRow {
   ward_key: string;
@@ -23,10 +24,12 @@ interface TotalsRawRow {
   real7: number;
 }
 
-export async function getWeeklyAggregates(now: Date = new Date()): Promise<WeeklyAggregates> {
-  const windowEnd = now;
-  const windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const windowPrev = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+export async function getWeeklyAggregates(asOfInput?: Date): Promise<WeeklyAggregates> {
+  // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
+  const asOf = asOfInput ?? (await getAsOf());
+  const windowEnd = computeWindowEnd(asOf); // asOf plus 1 second
+  const windowStart = new Date(windowEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const windowPrev = new Date(windowEnd.getTime() - 14 * 24 * 60 * 60 * 1000);
 
   // Grouped aggregates query
   const rawRows = await prisma.$queryRaw<AggregateRawRow[]>(Prisma.sql`
@@ -81,6 +84,7 @@ export async function getWeeklyAggregates(now: Date = new Date()): Promise<Weekl
   return {
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
+    asOf: asOf.toISOString(),
     totals: {
       current7: Number(totals.current7),
       previous7: Number(totals.previous7),
