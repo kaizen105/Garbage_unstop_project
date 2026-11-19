@@ -319,11 +319,25 @@ export function DashboardClient() {
                 <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 p-4 rounded-lg shadow-xl border border-purple-500 max-w-sm">
                   <h3 className="font-bold text-purple-400 mb-2 flex items-center justify-between">
                     Weekly Root-Cause Audit
-                    <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">
-                      AI-generated; verify on site
-                    </span>
+                    {auditResult.source === "template_fallback" ? (
+                      <span className="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded ml-2">
+                        Template text, LLM unavailable
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-purple-900 text-purple-200 px-2 py-0.5 rounded ml-2">
+                        AI-generated; verify on site
+                      </span>
+                    )}
                   </h3>
                   <div className="space-y-2 text-sm text-slate-300">
+                    {auditResult.model && (
+                      <p className="text-xs text-slate-400">
+                        <strong className="text-slate-300">Model:</strong>{" "}
+                        {auditResult.model === "openrouter/free" && auditResult.servedModel && !auditResult.model.includes("served by")
+                          ? `${auditResult.model} (served by ${auditResult.servedModel})`
+                          : (auditResult.model as string)}
+                      </p>
+                    )}
                     <p>
                       <strong className="text-slate-100">Ward:</strong> {auditResult.ward as string}{" "}
                       <span className="text-red-400">(+{auditResult.pct_increase as number}% anomaly)</span>
@@ -333,7 +347,7 @@ export function DashboardClient() {
                       {humanizeCategory(auditResult.dominant_anomaly as string)}
                     </p>
                     <p>
-                      <strong className="text-slate-100">Root Cause:</strong> {auditResult.root_cause as string}
+                      <strong className="text-slate-100">Possible cause (hypothesis):</strong> {auditResult.root_cause as string}
                     </p>
                     <p>
                       <strong className="text-slate-100">Recommended Action:</strong>{" "}

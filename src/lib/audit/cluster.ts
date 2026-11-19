@@ -1,11 +1,33 @@
-export function findLargestAnomaly(reports: { ward_id?: string; hazard_category: string; createdAt: string; lat?: number; lng?: number }[]) {
-  const now = new Date();
+export function findLargestAnomaly(
+  reports: { ward_id?: string; hazard_category: string; createdAt: string; lat?: number; lng?: number }[],
+  asOf?: Date
+) {
+  if (!reports || reports.length === 0) return null;
+
+  let effectiveTime: number;
+  if (asOf) {
+    effectiveTime = asOf.getTime();
+  } else {
+    let maxMs = -Infinity;
+    for (const r of reports) {
+      const ms = new Date(r.createdAt).getTime();
+      if (!isNaN(ms) && ms > maxMs) {
+        maxMs = ms;
+      }
+    }
+    if (maxMs === -Infinity) return null;
+    effectiveTime = maxMs;
+  }
+
   const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
   
-  const thisWeek = reports.filter(r => new Date(r.createdAt).getTime() > now.getTime() - ONE_WEEK);
+  const thisWeek = reports.filter(r => {
+    const t = new Date(r.createdAt).getTime();
+    return t > effectiveTime - ONE_WEEK && t <= effectiveTime;
+  });
   const prevWeek = reports.filter(r => {
     const t = new Date(r.createdAt).getTime();
-    return t <= now.getTime() - ONE_WEEK && t > now.getTime() - 2 * ONE_WEEK;
+    return t <= effectiveTime - ONE_WEEK && t > effectiveTime - 2 * ONE_WEEK;
   });
 
   const countsThis = new Map<string, number>();

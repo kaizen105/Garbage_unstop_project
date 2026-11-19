@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { RawMitigationPlanSchema } from "./schema";
 import { groundPlan, GroundingError } from "./ground";
 import { WeeklyAggregates } from "./types";
@@ -177,5 +179,82 @@ describe("Mitigation Plan Unit Tests", () => {
     const { plan } = await runMitigationChain(mockAggregates, mockModel as never);
     expect(plan.headline).toBe("Fallback Plan for Rohini & GK");
     expect(plan.priorities[0]!.wardKey).toBe("042-ROHINI-C");
+  });
+
+  it("records the served model when client exposes it", async () => {
+    const mockModel: unknown = {
+      withStructuredOutput: () => ({
+        invoke: vi.fn().mockResolvedValue({
+          raw: {
+            response_metadata: {
+              model_name: "meta-llama/llama-3.3-70b-instruct:free",
+            },
+          },
+          parsed: {
+            headline: "Plan with served model",
+            priorities: [
+              {
+                wardKey: "042-ROHINI-C",
+                category: "chemical",
+                urgency: "immediate",
+                likelyCauses: ["Industrial discharge"],
+                actions: [{ owner: "Pollution Board", action: "Audit site" }],
+              },
+            ],
+            crossCuttingActions: [],
+          },
+        }),
+      }),
+      invoke: vi.fn(),
+    };
+
+    const { plan, servedModel } = await runMitigationChain(mockAggregates, mockModel as never);
+    expect(plan.headline).toBe("Plan with served model");
+    expect(servedModel).toBe("meta-llama/llama-3.3-70b-instruct:free");
+  });
+
+  it("excludes UNRESOLVED ward from targeted priority interventions", () => {
+    const aggregatesWithUnresolved: WeeklyAggregates = {
+      ...mockAggregates,
+      rows: [
+        {
+          wardKey: "UNRESOLVED",
+          wardName: "Unresolved Ward",
+          category: "general_overflow",
+          current7: 10,
+          previous7: 5,
+          delta: 5,
+          avgSeverity: 5,
+          maxSeverity: 6,
+          actionCounts: { dispatch_hazmat_bypass_standard: 0, bypass_standard: 5, routine_collection: 5 },
+        },
+        ...mockAggregates.rows,
+      ],
+    };
+
+    const formatted = formatAggregatesForPrompt(aggregatesWithUnresolved);
+    expect(formatted).not.toContain('wardKey: "UNRESOLVED"');
+
+    const invalidPlan = {
+      headline: "Invalid plan with unresolved ward",
+      priorities: [
+        {
+          wardKey: "UNRESOLVED",
+          category: "general_overflow" as const,
+          urgency: "immediate" as const,
+          likelyCauses: ["Dumping"],
+          actions: [{ owner: "Dept", action: "Clean" }],
+        },
+      ],
+      crossCuttingActions: [],
+    };
+
+    expect(() => groundPlan(invalidPlan, aggregatesWithUnresolved)).toThrow(GroundingError);
+  });
+
+  it("verifies docs/DEPLOY.md contains no LLM_MODEL_FALLBACKS", () => {
+    const deployDocPath = path.resolve(__dirname, "../../../docs/DEPLOY.md");
+    const content = fs.readFileSync(deployDocPath, "utf-8");
+    expect(content).not.toContain("LLM_MODEL_FALLBACKS");
   });
 });

@@ -18,6 +18,9 @@ export interface GeneratePlanResult {
   stale?: boolean;
   includesSynthetic: boolean;
   model: string;
+  servedModel?: string;
+  unresolvedCount?: number;
+  dataQualityNotes?: string[];
   error?: string;
 }
 
@@ -35,6 +38,12 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
 
     if (latest && now.getTime() - latest.createdAt.getTime() < CACHE_TTL_MS) {
       const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
+      const planJsonObj = latest.planJson as unknown as Record<string, unknown>;
+      const servedModel = typeof planJsonObj?.servedModel === "string" ? planJsonObj.servedModel : undefined;
+      const unresolvedCount = aggregates?.rows
+        ? aggregates.rows.filter((r) => r.wardKey === "UNRESOLVED").reduce((sum, r) => sum + r.current7, 0)
+        : 0;
+
       return {
         status: "ok",
         plan: latest.planJson as unknown as GroundedMitigationPlan,
@@ -44,6 +53,11 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
         cached: true,
         includesSynthetic: latest.includesSynthetic,
         model: latest.model,
+        servedModel,
+        unresolvedCount,
+        dataQualityNotes: unresolvedCount > 0
+          ? [`${unresolvedCount} reports in the last 7 days could not be matched to a ward.`]
+          : [],
       };
     }
   }
@@ -65,18 +79,39 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
 
   // 3. Run LLM Chain & Ground
   try {
-    const { plan: rawPlan, modelUsed } = await runMitigationChain(aggregates);
+    const { plan: rawPlan, modelUsed, servedModel } = await runMitigationChain(aggregates);
     const grounded = groundPlan(rawPlan, aggregates);
+
+    const recordedModel =
+      modelUsed === "openrouter/free" && servedModel && servedModel !== modelUsed
+        ? `${modelUsed} (served by ${servedModel})`
+        : (servedModel || modelUsed);
+
+    const unresolvedCount = aggregates.rows
+      .filter((r) => r.wardKey === "UNRESOLVED")
+      .reduce((sum, r) => sum + r.current7, 0);
+
+    const dataQualityNotes =
+      unresolvedCount > 0
+        ? [`${unresolvedCount} reports in the last 7 days could not be matched to a ward.`]
+        : [];
+
+    const planJsonPayload = {
+      ...grounded,
+      servedModel,
+      unresolvedCount,
+      dataQualityNotes,
+    };
 
     // 4. Save to DB
     const saved = await prisma.mitigationPlan.create({
       data: {
         windowStart: new Date(aggregates.windowStart),
         windowEnd: new Date(aggregates.windowEnd),
-        model: modelUsed,
+        model: recordedModel,
         includesSynthetic: aggregates.totals.synthetic7 > 0,
         aggregatesJson: aggregates as unknown as Prisma.InputJsonValue,
-        planJson: grounded as unknown as Prisma.InputJsonValue,
+        planJson: planJsonPayload as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -88,7 +123,10 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
       generatedAt: saved.createdAt.toISOString(),
       cached: false,
       includesSynthetic: saved.includesSynthetic,
-      model: modelUsed,
+      model: recordedModel,
+      servedModel,
+      unresolvedCount,
+      dataQualityNotes,
     };
   } catch (err: unknown) {
     console.error("Error generating mitigation plan:", err);
@@ -105,7 +143,6 @@ export async function generateWeeklyPlan(options?: { force?: boolean }): Promise
   }
 }
 
-
 export async function getFreshCachedPlan(ttlMs: number = CACHE_TTL_MS): Promise<GeneratePlanResult | null> {
   const latest = await prisma.mitigationPlan.findFirst({
     orderBy: { createdAt: "desc" },
@@ -118,6 +155,12 @@ export async function getFreshCachedPlan(ttlMs: number = CACHE_TTL_MS): Promise<
   const now = new Date();
   if (now.getTime() - latest.createdAt.getTime() < ttlMs) {
     const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
+    const planJsonObj = latest.planJson as unknown as Record<string, unknown>;
+    const servedModel = typeof planJsonObj?.servedModel === "string" ? planJsonObj.servedModel : undefined;
+    const unresolvedCount = aggregates?.rows
+      ? aggregates.rows.filter((r) => r.wardKey === "UNRESOLVED").reduce((sum, r) => sum + r.current7, 0)
+      : 0;
+
     return {
       status: "ok",
       plan: latest.planJson as unknown as GroundedMitigationPlan,
@@ -127,6 +170,12 @@ export async function getFreshCachedPlan(ttlMs: number = CACHE_TTL_MS): Promise<
       cached: true,
       includesSynthetic: latest.includesSynthetic,
       model: latest.model,
+      servedModel,
+      unresolvedCount,
+      dataQualityNotes:
+        unresolvedCount > 0
+          ? [`${unresolvedCount} reports in the last 7 days could not be matched to a ward.`]
+          : [],
     };
   }
 
@@ -149,6 +198,12 @@ export async function getLatestCachedPlan(options?: { stale?: boolean }): Promis
   }
 
   const aggregates = latest.aggregatesJson as unknown as WeeklyAggregates;
+  const planJsonObj = latest.planJson as unknown as Record<string, unknown>;
+  const servedModel = typeof planJsonObj?.servedModel === "string" ? planJsonObj.servedModel : undefined;
+  const unresolvedCount = aggregates?.rows
+    ? aggregates.rows.filter((r) => r.wardKey === "UNRESOLVED").reduce((sum, r) => sum + r.current7, 0)
+    : 0;
+
   return {
     status: "ok",
     plan: latest.planJson as unknown as GroundedMitigationPlan,
@@ -159,5 +214,11 @@ export async function getLatestCachedPlan(options?: { stale?: boolean }): Promis
     ...(options?.stale ? { stale: true } : {}),
     includesSynthetic: latest.includesSynthetic,
     model: latest.model,
+    servedModel,
+    unresolvedCount,
+    dataQualityNotes:
+      unresolvedCount > 0
+        ? [`${unresolvedCount} reports in the last 7 days could not be matched to a ward.`]
+        : [],
   };
 }

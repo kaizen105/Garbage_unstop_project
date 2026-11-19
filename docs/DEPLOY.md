@@ -39,6 +39,19 @@ To enable live features, add the following variables in the Vercel Dashboard (un
 | `GNANI_API_KEY` | `your_gnani_key` | Disables mock voice transcription. |
 | `GNANI_STT_URL` | `https://api.gnani.ai/...` | The STT endpoint. |
 
+### LLM Provider and Model Configuration
+
+The application supports real LLM routing for citizen hazard extraction and 7-day mitigation plan generation via the following environment variables:
+
+- `LLM_PROVIDER`: Set to `openrouter` (or `mock` for offline synthetic testing).
+- `LLM_MODEL_EXTRACT`: Model identifier used for citizen hazard report extraction (example placeholder: `provider/model-id-extract`).
+- `LLM_MODEL_AUDIT`: Model identifier used for 7-day municipal mitigation plan generation (example placeholder: `provider/model-id-audit`).
+
+Notes on model availability and error handling:
+- Free models on providers like OpenRouter can be rate limited or removed without notice.
+- On failure, the route serves the latest cached plan, or returns status "degraded" with model "error".
+- You can evaluate candidate models before deployment by running the probe script: `npm run probe:llm`.
+
 Once environment variables are set, click **Deploy**.
 
 ## 4. Live Smoke-Test Checklist

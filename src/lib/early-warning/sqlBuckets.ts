@@ -29,6 +29,7 @@ export interface EarlyWarningResponse {
   citywide: CitywideWeekData[];
   wardCounts: Record<string, number>;
   asOf: string;
+  unresolvedCount?: number;
 }
 
 /**
@@ -110,7 +111,7 @@ export function computeCitywideTrendFromBuckets(
 
 /**
  * Executes SQL aggregation over the 28-day window grouped by ward and category.
- * Grouping is strictly COALESCE(w."name", r."rawLocation"), r."hazardCategory".
+ * Reports without a ward match are grouped under "Unresolved (no ward match)".
  */
 export async function getEarlyWarningSqlBuckets(asOfInput?: Date): Promise<SqlBucketRow[]> {
   // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
@@ -123,7 +124,7 @@ export async function getEarlyWarningSqlBuckets(asOfInput?: Date): Promise<SqlBu
 
   const rawRows = await prisma.$queryRaw<SqlBucketRow[]>(Prisma.sql`
     SELECT
-      COALESCE(w."name", r."rawLocation") AS ward_name,
+      COALESCE(w."name", 'Unresolved (no ward match)') AS ward_name,
       r."hazardCategory" AS hazard_category,
       COUNT(CASE WHEN r."createdAt" >= ${w0Start} AND r."createdAt" < ${windowEnd} THEN 1 END)::int AS count_w0,
       COUNT(CASE WHEN r."createdAt" >= ${w1Start} AND r."createdAt" < ${w0Start} THEN 1 END)::int AS count_w1,
@@ -134,7 +135,7 @@ export async function getEarlyWarningSqlBuckets(asOfInput?: Date): Promise<SqlBu
     FROM "Report" r
     LEFT JOIN "Ward" w ON r."wardId" = w."id"
     WHERE r."createdAt" >= ${w3Start} AND r."createdAt" < ${windowEnd}
-    GROUP BY COALESCE(w."name", r."rawLocation"), r."hazardCategory"
+    GROUP BY COALESCE(w."name", 'Unresolved (no ward match)'), r."hazardCategory"
     ORDER BY ward_name ASC, r."hazardCategory" ASC
   `);
 
@@ -161,10 +162,7 @@ export async function attachLandmarksToHotspots(
     const sampleReports = await prisma.report.findMany({
       where: {
         createdAt: { gte: w0Start, lt: windowEnd },
-        OR: [
-          { ward: { name: wardName } },
-          { rawLocation: wardName },
-        ],
+        ward: { name: wardName },
         lat: { not: null },
         lng: { not: null },
       },
@@ -219,11 +217,17 @@ export async function getEarlyWarningData(asOfInput?: Date): Promise<EarlyWarnin
   const buckets = convertSqlBucketsToWardBuckets(sqlRows);
   const citywide = computeCitywideTrendFromBuckets(sqlRows);
 
-  // Compute this-week counts per ward for map hotspot shading
+  // Compute this-week counts per ward for map hotspot shading (excluding unresolved)
   const wardCounts: Record<string, number> = {};
   for (const [ward, b] of Object.entries(buckets)) {
-    wardCounts[ward] = b.counts[0];
+    if (ward !== "Unresolved (no ward match)") {
+      wardCounts[ward] = b.counts[0];
+    }
   }
+
+  // Compute unresolved weekly count
+  const unresolvedRow = sqlRows.filter((r) => r.ward_name === "Unresolved (no ward match)");
+  const unresolvedCount = unresolvedRow.reduce((sum, r) => sum + r.count_w0, 0);
 
   // Rank hotspots from bucket rows
   const ranked = rankHotspots(buckets, asOf.getTime(), 5);
@@ -236,5 +240,6 @@ export async function getEarlyWarningData(asOfInput?: Date): Promise<EarlyWarnin
     citywide,
     wardCounts,
     asOf: asOf.toISOString(),
+    unresolvedCount,
   };
 }

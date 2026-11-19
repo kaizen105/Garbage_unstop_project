@@ -23,6 +23,9 @@ export interface HotspotRanking {
   suggested_department: string;
   projection: number;
   area_landmark?: string;
+  mean?: number;
+  std?: number;
+  flagged_reason?: string;
 }
 
 import landmarks from "../../../data/delhi_landmarks.json";
@@ -32,7 +35,12 @@ export function weeklyBuckets(reports: Report[], now: number = Date.now()): Reco
   const buckets: Record<string, WardBucket> = {};
 
   for (const r of reports) {
-    const ward = r.raw_location;
+    const ward =
+      r.ward?.status === "matched" && r.ward.ward_name
+        ? r.ward.ward_name
+        : r.ward?.status === "unmapped"
+        ? "Unresolved (no ward match)"
+        : r.raw_location || "Unresolved (no ward match)";
 
     const ageMs = now - new Date(r.createdAt || Date.now()).getTime();
     if (ageMs < 0 || ageMs > 4 * ONE_WEEK) continue; // Skip future or >4 weeks old
@@ -62,12 +70,15 @@ export function scoreWard(buckets: WardBucket | [number, number, number, number]
   
   const prior_weeks = [w1, w2, w3];
   const mean = prior_weeks.reduce((a, b) => a + b, 0) / 3;
-  const variance = prior_weeks.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / 3;
-  const std = Math.sqrt(variance);
+  // Sample variance with N - 1 = 2 degrees of freedom
+  const variance = prior_weeks.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / 2;
+  const sample_std = Math.sqrt(variance);
+  const std_floor = Math.max(1, Math.sqrt(mean));
+  const std = Math.max(std_floor, sample_std);
   
-  const anomaly_score = (this_week - mean) / Math.max(1, std);
+  const anomaly_score = (this_week - mean) / std;
   
-  return { this_week, prev_week, pct_change, mean, std, anomaly_score };
+  return { this_week, prev_week, pct_change, mean, std: sample_std, effective_std: std, anomaly_score };
 }
 
 export function projectNextWeek(input: [number, number, number, number] | { counts: [number, number, number, number] }) {
@@ -91,12 +102,45 @@ export function projectNextWeek(input: [number, number, number, number] | { coun
   return Math.max(0, Math.round(last + slope));
 }
 
-export function getRisk(anomaly_score: number, pct_change: number, this_week: number): "high" | "medium" | "low" {
-  // "high" if anomaly_score >= 2 or pct_change >= 100% with this_week >=3
-  if (anomaly_score >= 2 || (pct_change >= 100 && this_week >= 3)) return "high";
-  // "medium" if anomaly_score >= 1 or pct_change >= 50% with this_week >= 2
-  if (anomaly_score >= 1 || (pct_change >= 50 && this_week >= 2)) return "medium";
+export const MIN_HIGH_THRESHOLD = 13;
+
+export function getRisk(
+  anomaly_score: number,
+  pct_change: number,
+  this_week: number,
+  mean: number = 0,
+  prev_week: number = 0,
+  minHigh: number = MIN_HIGH_THRESHOLD
+): "high" | "medium" | "low" {
+  // R2: "high" requires anomaly_score >= 2 AND this_week >= MIN_HIGH AND (this_week - mean) >= 3
+  if (anomaly_score >= 2 && this_week >= minHigh && (this_week - mean) >= 3) {
+    return "high";
+  }
+  // "medium" if anomaly_score >= 1 or pct rule when prev_week >= 3
+  if (anomaly_score >= 1 || (pct_change >= 50 && this_week >= 2 && prev_week >= 3)) {
+    return "medium";
+  }
   return "low";
+}
+
+export function getWhyFlagged(
+  risk: "high" | "medium" | "low",
+  anomaly_score: number,
+  this_week: number,
+  minHigh: number = MIN_HIGH_THRESHOLD,
+  pct_change: number = 0,
+  prev_week: number = 0
+): string {
+  if (risk === "high") {
+    return `score ${anomaly_score.toFixed(1)} is at least 2, and ${this_week} reports is at least ${minHigh}`;
+  }
+  if (risk === "medium") {
+    if (anomaly_score >= 1) {
+      return `score ${anomaly_score.toFixed(1)} is at least 1`;
+    }
+    return `increase +${pct_change.toFixed(0)}% with ${prev_week} baseline reports`;
+  }
+  return "within baseline variation";
 }
 
 export function getCategoryDetails(category: string) {
@@ -141,6 +185,7 @@ export function rankHotspots(
 
   for (const b of Object.values(buckets) as WardBucket[]) {
     const ward = b.ward;
+    if (ward === "Unresolved (no ward match)") continue;
     const score = scoreWard(b);
     
     // Wards with this_week >= 2
@@ -186,9 +231,26 @@ export function rankHotspots(
       }
     }
 
+    const risk = getRisk(
+      score.anomaly_score,
+      score.pct_change,
+      score.this_week,
+      score.mean,
+      score.prev_week,
+      MIN_HIGH_THRESHOLD
+    );
+    const whyFlagged = getWhyFlagged(
+      risk,
+      score.anomaly_score,
+      score.this_week,
+      MIN_HIGH_THRESHOLD,
+      score.pct_change,
+      score.prev_week
+    );
+
     rankings.push({
       ward,
-      risk: getRisk(score.anomaly_score, score.pct_change, score.this_week),
+      risk,
       this_week: score.this_week,
       pct_change: score.pct_change,
       anomaly_score: score.anomaly_score,
@@ -198,7 +260,10 @@ export function rankHotspots(
       likely_cause: details.cause,
       suggested_department: details.dept,
       projection: projectNextWeek(b.counts),
-      area_landmark
+      area_landmark,
+      mean: score.mean,
+      std: score.std,
+      flagged_reason: whyFlagged,
     });
   }
 

@@ -4,7 +4,7 @@ export const MITIGATION_SYSTEM_PROMPT = `You are a Municipal Sanitation & Hazard
 You analyze aggregated municipal incident data from the past 7 days to formulate a focused, actionable 7-day operational mitigation plan.
 
 CRITICAL INSTRUCTIONS:
-1. Grounding: You must ONLY select priorities from the provided (wardKey, category) aggregates list. Do NOT invent wards or hazard categories.
+1. Grounding: You must ONLY select priorities from the provided (wardKey, category) aggregates list. Do NOT invent wards or hazard categories. Do NOT select UNRESOLVED.
 2. DO NOT output raw numbers or incident counts in your response (e.g., do not say "35 incidents reported" or "up by 400%"). Qualitative descriptions ("surge", "persistent cluster", "critical severity spike") are expected. Exact verified numbers are enriched programmatically after generation.
 3. Keep headline under 200 characters summarizing the primary operational posture for the week.
 4. Select 1 to 5 top priorities. For each priority:
@@ -22,7 +22,7 @@ export function formatAggregatesForPrompt(aggregates: WeeklyAggregates): string 
     "Incidents by Ward & Category (Sorted by volume & severity):",
   ];
 
-  for (const r of aggregates.rows.slice(0, 30)) {
+  for (const r of aggregates.rows.filter((row) => row.wardKey !== "UNRESOLVED").slice(0, 30)) {
     lines.push(
       `- wardKey: "${r.wardKey}", wardName: "${r.wardName}", category: "${r.category}", ` +
       `current7: ${r.current7}, previous7: ${r.previous7}, delta: ${r.delta}, ` +

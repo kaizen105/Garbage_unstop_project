@@ -16,7 +16,9 @@
     "test:int": "vitest run --config vitest.int.config.ts",
     "profile": "tsx scripts/profile_grievances.ts",
     "gen:10k": "tsx scripts/generate_synthetic_10k.ts",
-    "gen:10k:dry": "tsx scripts/generate_synthetic_10k.ts --dry-run"
+    "gen:10k:dry": "tsx scripts/generate_synthetic_10k.ts --dry-run",
+    "backtest": "tsx scripts/backtest_early_warning.ts",
+    "probe:llm": "tsx scripts/probe_llm_models.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.4.1",

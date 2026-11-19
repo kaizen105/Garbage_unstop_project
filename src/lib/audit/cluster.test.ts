@@ -43,4 +43,41 @@ describe('findLargestAnomaly', () => {
     expect(res?.ward).toBe('NDMC CHARGE 2');
     expect(res?.category).toBe('construction_debris');
   });
+
+  it('reports dated 60 days ago give the same result as the same pattern dated today', () => {
+    const today = new Date();
+    const todayThisWeek = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const todayPrevWeek = new Date(today.getTime() - 9 * 24 * 60 * 60 * 1000).toISOString();
+    const reportsToday = [
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: todayThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: todayThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: todayThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: todayPrevWeek },
+    ];
+
+    const pastBase = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const pastThisWeek = new Date(pastBase.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const pastPrevWeek = new Date(pastBase.getTime() - 9 * 24 * 60 * 60 * 1000).toISOString();
+    const reportsPast = [
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: pastThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: pastThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: pastThisWeek, lat: 10, lng: 20 },
+      { ward_id: 'w1', hazard_category: 'chemical', createdAt: pastPrevWeek },
+    ];
+
+    const resToday = findLargestAnomaly(reportsToday);
+    const resPast = findLargestAnomaly(reportsPast);
+
+    expect(resToday).toBeDefined();
+    expect(resPast).toBeDefined();
+    expect(resPast).toEqual(resToday);
+    expect(resPast).toEqual({
+      ward: 'w1',
+      category: 'chemical',
+      this_week: 3,
+      prev_week: 1,
+      pct_increase: 200,
+      centroid: { lat: 10, lng: 20 },
+    });
+  });
 });

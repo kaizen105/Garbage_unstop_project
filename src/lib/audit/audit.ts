@@ -1,6 +1,7 @@
 import { findLargestAnomaly } from "./cluster";
-import { chat } from "@/lib/llm/provider";
+import { chatWithMeta } from "@/lib/llm/provider";
 import { extractJSON } from "@/lib/llm/parse";
+import { getEnv } from "@/lib/env";
 import { z } from "zod";
 
 const AuditResultSchema = z.object({
@@ -46,28 +47,46 @@ Previous Week: ${cluster.prev_week}
 Increase: ${cluster.pct_increase}%
 Centroid: ${cluster.centroid ? `lat: ${cluster.centroid.lat}, lng: ${cluster.centroid.lng}` : "Unknown"}`;
 
+  const env = getEnv();
+  const configuredModel = env.LLM_MODEL_AUDIT;
+
   try {
-    const raw = await chat([
+    const res1 = await chatWithMeta([
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt }
-    ], process.env.LLM_MODEL_AUDIT || "openai/gpt-4o-mini"); 
+    ], configuredModel);
+
+    let raw = res1.content;
+    let servedModel = res1.servedModel;
 
     let parsed;
     try {
       parsed = extractJSON(raw);
     } catch {
-      const raw2 = await chat([
+      const res2 = await chatWithMeta([
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
         { role: "assistant", content: raw },
         { role: "user", content: "Invalid JSON. Output ONLY valid JSON." }
-      ], process.env.LLM_MODEL_AUDIT || "openai/gpt-4o-mini");
-      parsed = extractJSON(raw2);
+      ], configuredModel);
+      raw = res2.content;
+      parsed = extractJSON(raw);
+      if (res2.servedModel) {
+        servedModel = res2.servedModel;
+      }
     }
     
     const validated = AuditResultSchema.parse(parsed);
+
+    const modelDisplay = (configuredModel === "openrouter/free" && servedModel && servedModel !== configuredModel)
+      ? `${configuredModel} (served by ${servedModel})`
+      : (servedModel || configuredModel);
+
     return {
       status: "success",
+      source: "llm" as const,
+      model: modelDisplay,
+      servedModel,
       ward: validated.ward,
       pct_increase: cluster.pct_increase,
       centroid: cluster.centroid,
@@ -79,6 +98,8 @@ Centroid: ${cluster.centroid ? `lat: ${cluster.centroid.lat}, lng: ${cluster.cen
     const mock = getMockAudit(cluster.category);
     return {
       status: "success",
+      source: "template_fallback" as const,
+      model: "mock",
       ward: cluster.ward,
       pct_increase: cluster.pct_increase,
       centroid: cluster.centroid,

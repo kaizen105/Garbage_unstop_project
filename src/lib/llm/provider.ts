@@ -1,10 +1,26 @@
 import { getEnv } from "../env";
 
+export interface ChatResultWithMeta {
+  content: string;
+  servedModel?: string;
+}
+
 export async function chat(messages: { role: string; content: string }[], model?: string): Promise<string> {
+  const result = await chatWithMeta(messages, model);
+  return result.content;
+}
+
+export async function chatWithMeta(
+  messages: { role: string; content: string }[],
+  model?: string
+): Promise<ChatResultWithMeta> {
   const env = getEnv();
   
   if (env.LLM_PROVIDER === "mock") {
-    return `{"hazard_category":"unknown","severity_level":5,"raw_location":""}`;
+    return {
+      content: `{"hazard_category":"unknown","severity_level":5,"raw_location":""}`,
+      servedModel: "mock",
+    };
   }
 
   const payload = {
@@ -67,5 +83,7 @@ export async function chat(messages: { role: string; content: string }[], model?
     throw new Error("Empty content from LLM");
   }
 
-  return content;
+  const servedModel = typeof data.model === "string" ? data.model : undefined;
+
+  return { content, servedModel };
 }

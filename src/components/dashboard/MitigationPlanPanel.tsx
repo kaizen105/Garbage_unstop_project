@@ -109,7 +109,9 @@ export function MitigationPlanPanel() {
               {data.cached ? "Cached (< 60m)" : "Fresh Synthesis"}
             </span>
             <span className="px-2.5 py-1 rounded bg-slate-800 text-slate-300">
-              Model: {data.model}
+              Model: {data.model === "openrouter/free" && data.servedModel && !data.model.includes("served by")
+                ? `${data.model} (served by ${data.servedModel})`
+                : data.model}
             </span>
             {data.includesSynthetic && (
               <span className="px-2.5 py-1 rounded bg-purple-950/80 text-purple-300">
@@ -129,6 +131,12 @@ export function MitigationPlanPanel() {
             </div>
           )}
 
+          {typeof data.unresolvedCount === "number" && (
+            <div className="text-xs text-slate-400 -mt-2">
+              {data.unresolvedCount} reports in the last 7 days could not be matched to a ward
+            </div>
+          )}
+
           {data.status === "no_data" && (
             <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800 text-slate-400">
               No reports recorded in the last 7 days.
@@ -137,7 +145,7 @@ export function MitigationPlanPanel() {
 
           {data.status === "degraded" && (
             <div className="p-4 bg-yellow-950/50 border border-yellow-800 text-yellow-300 rounded-lg text-sm">
-              Operational alert: {data.error || "Degraded mode"}
+              Plan generation degraded: {data.error || "LLM synthesis unavailable. Displaying raw data without synthesized plan."}
             </div>
           )}
 

@@ -108,6 +108,11 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
           Data as of {new Date(serverData.asOf).toLocaleString()}
         </div>
       )}
+      {typeof serverData?.unresolvedCount === "number" && (
+        <div className="text-xs text-slate-400 -mt-3">
+          {serverData.unresolvedCount} reports this week could not be matched to a ward
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
           <div className="text-slate-400 text-sm">Wards on Watch</div>
@@ -125,30 +130,53 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
       </div>
 
       <div className="flex flex-col gap-4">
-        <h2 className="text-xl font-bold text-slate-200 border-b border-slate-700 pb-2">Ranked Hotspots</h2>
+        <div className="border-b border-slate-700 pb-2">
+          <h2 className="text-xl font-bold text-slate-200">Ranked Hotspots</h2>
+          <div className="text-xs text-slate-400 mt-0.5">Scores are not probabilities. Four weekly buckets cannot show seasonality.</div>
+        </div>
         {hotspots.map((h, idx) => {
           const maxVal = Math.max(...h.sparkline, 1);
           const wPrev = h.sparkline[2];
           const wCurr = h.sparkline[3];
+          const prior0 = h.sparkline[0] ?? 0;
+          const prior1 = h.sparkline[1] ?? 0;
+          const prior2 = h.sparkline[2] ?? 0;
+          const meanVal = h.mean ?? (prior0 + prior1 + prior2) / 3;
+          const sampleVar = (Math.pow(prior0 - meanVal, 2) + Math.pow(prior1 - meanVal, 2) + Math.pow(prior2 - meanVal, 2)) / 2;
+          const stdVal = h.std ?? Math.sqrt(sampleVar);
+          const scoreVal = h.score ?? h.anomaly_score;
+          const whyFlagged = h.flagged_reason ?? (
+            h.risk === "high"
+              ? `score ${scoreVal.toFixed(1)} is at least 2, and ${h.this_week} reports is at least 13`
+              : h.risk === "medium"
+                ? scoreVal >= 1
+                  ? `score ${scoreVal.toFixed(1)} is at least 1`
+                  : `increase +${h.pct_change.toFixed(0)}% with ${wPrev} baseline reports`
+                : "within baseline variation"
+          );
+
           return (
             <div key={h.ward} className="bg-slate-800 rounded-lg p-4 flex gap-6 items-center border border-slate-700 hover:border-slate-500 cursor-pointer transition-colors" onClick={() => onSelectWard(h.ward)}>
               <div className="text-slate-500 font-bold w-6">#{idx + 1}</div>
-              <div className="w-48">
+              <div className="w-52">
                 <div className="font-bold text-lg truncate" title={h.ward}>{h.ward}</div>
                 {h.area_landmark && <div className="text-xs text-slate-400 mt-0.5 truncate" title={`near ${h.area_landmark}`}>near {h.area_landmark}</div>}
                 <div className={`inline-block px-2 py-0.5 mt-1 rounded text-xs border ${riskColors[h.risk]}`}>
                   {h.risk.toUpperCase()}
                 </div>
+                <div className="text-xs text-slate-400 mt-1 cursor-help truncate" title={`Why flagged: ${whyFlagged}`}>
+                  <span className="text-slate-500">Why flagged:</span> {whyFlagged}
+                </div>
               </div>
               <div className="w-44">
-                <div className="text-xs text-slate-400 mb-0.5">This week (observed)</div>
+                <div className="text-xs text-slate-400 mb-0.5">Observed this week</div>
                 <div className="text-2xl font-bold">{h.this_week}</div>
-                <div className="text-xs text-slate-400 mt-1.5 mb-0.5">Change vs last week</div>
+                <div className="text-xs text-slate-400 mt-1.5 mb-0.5">Week-over-week change</div>
                 <div className={`text-sm ${h.pct_change >= 0 ? "text-red-400" : "text-green-400"}`}>
                   {h.pct_change > 0 ? "+" : ""}{h.pct_change.toFixed(0)}% ({wPrev} to {wCurr})
                 </div>
               </div>
-              <div className="flex flex-col w-32 items-center">
+              <div className="flex flex-col w-36 items-center">
                 <div className="flex items-end gap-1 h-12 mt-2">
                   {h.sparkline.map((val, i) => (
                     <div key={i} className="w-5 bg-blue-500/50 rounded-t" style={{ height: `${(val / maxVal) * 100}%` }} title={`Week -${3-i}: ${val}`}></div>
@@ -158,18 +186,18 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
                   <span>W-3</span><span>W-2</span><span>W-1</span><span>W0</span>
                 </div>
                 <div className="text-[10px] text-slate-500 text-center mt-1">
-                  Baseline: 3 prior weeks
+                  Baseline: 3 prior weeks, mean {meanVal.toFixed(1)}, std {stdVal.toFixed(1)}
                 </div>
               </div>
               <div className="w-28 text-center">
                 <div
-                  title="z-score of this week against the previous 3 weeks. Not a probability."
+                  title={`z-score against previous 3 weeks. Why flagged: ${whyFlagged}`}
                   className="text-slate-400 text-xs font-semibold cursor-help border-b border-dashed border-slate-600 inline-block mb-1"
                 >
                   Anomaly score
                 </div>
                 <div className="text-2xl font-bold text-yellow-400">
-                  {(h.score ?? h.anomaly_score).toFixed(1)}
+                  {scoreVal.toFixed(1)}
                 </div>
               </div>
               <div className="flex-1 text-sm text-slate-300 grid grid-cols-2 gap-2">
@@ -177,8 +205,8 @@ export function EarlyWarningPanel({ reports = [], onSelectWard, initialData }: E
                 <div><span className="text-slate-500">Likely cause:</span> <br/>{h.likely_cause}</div>
                 <div className="col-span-2"><span className="text-slate-500">Suggested Dept:</span> {h.suggested_department}</div>
               </div>
-              <div className="w-32 text-center">
-                <div className="text-slate-400 text-xs uppercase font-bold tracking-wider mb-1">Trend estimate (next week)</div>
+              <div className="w-36 text-center">
+                <div className="text-slate-400 text-xs uppercase font-bold tracking-wider mb-1">Trend-based projection</div>
                 <div className="text-3xl font-bold text-purple-400">{h.projection}</div>
               </div>
             </div>

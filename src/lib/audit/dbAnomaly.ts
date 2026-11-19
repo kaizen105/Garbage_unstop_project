@@ -18,8 +18,7 @@ interface SqlAnomalyRow {
 
 /**
  * Bounded SQL aggregation to find the single largest weekly hazard anomaly in Postgres.
- * Groups by COALESCE(w."name", r."rawLocation") and r."hazardCategory".
- * Considers reports in the last 14 days without loading 10,000 rows into memory.
+ * Considers reports with a matched ward in the last 14 days without loading 10,000 rows into memory.
  */
 export async function findLargestAnomalyFromDb(asOfInput?: Date): Promise<AnomalyCluster | null> {
   // live reports with isSynthetic = false and createdAt after asOf fall outside these windows by design.
@@ -32,7 +31,7 @@ export async function findLargestAnomalyFromDb(asOfInput?: Date): Promise<Anomal
   const rows = await prisma.$queryRaw<SqlAnomalyRow[]>(Prisma.sql`
     WITH ward_category_counts AS (
       SELECT
-        COALESCE(w."name", r."rawLocation") AS ward_name,
+        COALESCE(w."name", 'Unresolved (no ward match)') AS ward_name,
         r."hazardCategory" AS hazard_category,
         COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} THEN 1 END)::int AS this_week,
         COUNT(CASE WHEN r."createdAt" >= ${prevWeekStart} AND r."createdAt" < ${thisWeekStart} THEN 1 END)::int AS prev_week,
@@ -42,7 +41,8 @@ export async function findLargestAnomalyFromDb(asOfInput?: Date): Promise<Anomal
       FROM "Report" r
       LEFT JOIN "Ward" w ON r."wardId" = w."id"
       WHERE r."createdAt" >= ${prevWeekStart} AND r."createdAt" < ${windowEnd}
-      GROUP BY COALESCE(w."name", r."rawLocation"), r."hazardCategory"
+        AND r."wardId" IS NOT NULL
+      GROUP BY COALESCE(w."name", 'Unresolved (no ward match)'), r."hazardCategory"
       HAVING COUNT(CASE WHEN r."createdAt" >= ${thisWeekStart} AND r."createdAt" < ${windowEnd} THEN 1 END) >= 3
     )
     SELECT

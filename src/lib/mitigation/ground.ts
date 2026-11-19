@@ -22,6 +22,10 @@ export function groundPlan(
   const groundedPriorities = [];
 
   for (const p of rawPlan.priorities) {
+    if (p.wardKey === "UNRESOLVED") {
+      throw new GroundingError("UNRESOLVED cannot be selected as a targeted priority intervention.");
+    }
+
     const key = `${p.wardKey}::${p.category}`;
     if (seenKeys.has(key)) {
       throw new GroundingError(`Duplicate priority key in plan: ${key}`);

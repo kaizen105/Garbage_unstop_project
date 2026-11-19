@@ -6,10 +6,16 @@ import { MITIGATION_SYSTEM_PROMPT, formatAggregatesForPrompt } from "./prompt";
 import { WeeklyAggregates } from "./types";
 import { extractJSON } from "@/lib/llm/parse";
 
+export interface MitigationChainResult {
+  plan: RawMitigationPlan;
+  modelUsed: string;
+  servedModel?: string;
+}
+
 export async function runMitigationChain(
   aggregates: WeeklyAggregates,
   customModel?: ChatOpenAI
-): Promise<{ plan: RawMitigationPlan; modelUsed: string }> {
+): Promise<MitigationChainResult> {
   if (aggregates.rows.length === 0) {
     throw new Error("Cannot run mitigation chain on empty aggregates.");
   }
@@ -19,7 +25,7 @@ export async function runMitigationChain(
 
   // Fallback / mock mode when LLM_PROVIDER is mock
   if (env.LLM_PROVIDER === "mock" && !customModel) {
-    const top = aggregates.rows.slice(0, 3);
+    const top = aggregates.rows.filter((r) => r.wardKey !== "UNRESOLVED").slice(0, 3);
     const mockPlan: RawMitigationPlan = {
       headline: `Weekly Priority Mitigation Plan: Focus on ${top[0]?.wardName || "Delhi MCD"}`,
       priorities: top.map((r, i) => ({
@@ -46,7 +52,7 @@ export async function runMitigationChain(
         "Issue citizen alerts for municipal drop-off schedules.",
       ],
     };
-    return { plan: mockPlan, modelUsed: "mock" };
+    return { plan: mockPlan, modelUsed: "mock", servedModel: "mock" };
   }
 
   const model =
@@ -68,18 +74,30 @@ export async function runMitigationChain(
     { role: "user" as const, content: `Current 7-Day Municipal Incident Aggregates:\n\n${promptInput}` },
   ];
 
+  let servedModel: string | undefined;
+
   try {
-    const structuredLlm = model.withStructuredOutput(RawMitigationPlanSchema);
-    const result = (await structuredLlm.invoke(messages)) as RawMitigationPlan;
-    return { plan: RawMitigationPlanSchema.parse(result), modelUsed: modelName };
+    const structuredLlm = model.withStructuredOutput(RawMitigationPlanSchema, { includeRaw: true });
+    const rawResult = await structuredLlm.invoke(messages);
+    let planData: unknown = rawResult;
+    if (rawResult && typeof rawResult === "object" && "parsed" in rawResult) {
+      planData = (rawResult as { parsed: unknown }).parsed;
+      const rawMsg = (rawResult as { raw?: { response_metadata?: { model_name?: string; model?: string } } }).raw;
+      servedModel = rawMsg?.response_metadata?.model_name || rawMsg?.response_metadata?.model;
+    }
+    return { plan: RawMitigationPlanSchema.parse(planData), modelUsed: modelName, servedModel };
   } catch (err: unknown) {
     console.warn("withStructuredOutput failed, attempting raw completion + repair parse:", err instanceof Error ? err.message : String(err));
     const rawRes = await model.invoke(messages);
+    if (rawRes && typeof rawRes === "object") {
+      const rawMsg = rawRes as { response_metadata?: { model_name?: string; model?: string } };
+      servedModel = rawMsg?.response_metadata?.model_name || rawMsg?.response_metadata?.model;
+    }
     const text = typeof rawRes.content === "string" ? rawRes.content : JSON.stringify(rawRes.content);
     const parsed = extractJSON(text);
     if (!parsed) {
       throw new Error(`Failed to parse mitigation plan from model response: ${text.slice(0, 200)}`);
     }
-    return { plan: RawMitigationPlanSchema.parse(parsed), modelUsed: modelName };
+    return { plan: RawMitigationPlanSchema.parse(parsed), modelUsed: modelName, servedModel };
   }
 }

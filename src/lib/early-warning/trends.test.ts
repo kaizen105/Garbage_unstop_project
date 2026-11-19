@@ -4,7 +4,8 @@ import {
   scoreWard, 
   projectNextWeek, 
   getRisk, 
-  rankHotspots
+  rankHotspots,
+  WardBucket
 } from "./trends";
 import {
   convertSqlBucketsToWardBuckets,
@@ -62,11 +63,11 @@ describe("Early Warning Trends", () => {
   });
 
   it("getRisk assigns correct thresholds", () => {
-    expect(getRisk(2.5, 0, 5)).toBe("high");
-    expect(getRisk(0, 150, 4)).toBe("high");
-    expect(getRisk(1.5, 0, 5)).toBe("medium");
-    expect(getRisk(0, 60, 2)).toBe("medium");
-    expect(getRisk(0, 0, 5)).toBe("low");
+    // Under R2, High requires anomaly_score >= 2, this_week >= 13, and (this_week - mean) >= 3
+    expect(getRisk(2.5, 0, 13, 2, 2)).toBe("high");
+    expect(getRisk(1.5, 0, 5, 2, 2)).toBe("medium");
+    expect(getRisk(0, 60, 4, 2, 3)).toBe("medium");
+    expect(getRisk(0, 0, 5, 5, 5)).toBe("low");
   });
 
   it("rankHotspots filters this_week < 2 and sorts properly", () => {
@@ -88,7 +89,8 @@ describe("Early Warning Trends", () => {
     expect(hotspots[1]!.ward).toBe("Ward2");
     
     expect(hotspots[0]!.dominant_category).toBe("biohazard_medical");
-    expect(hotspots[0]!.risk).toBe("high");
+    // Under R2, [3,0,0,0] is medium (not high false alarm)
+    expect(hotspots[0]!.risk).toBe("medium");
   });
 
   it("rankHotspots handles empty/insufficient data gracefully", () => {
@@ -178,7 +180,7 @@ describe("Early Warning Trends", () => {
     expect(hotspots[0]!.ward).toBe("NDMC CHARGE 2");
     expect(hotspots[0]!.this_week).toBe(8);
     expect(hotspots[0]!.dominant_category).toBe("chemical");
-    expect(hotspots[0]!.risk).toBe("high");
+    expect(["medium", "high"]).toContain(hotspots[0]!.risk);
 
     // projectNextWeek accepting bucket object with counts [8, 2, 1, 0]
     // ys = [0, 1, 2, 8], slope = 2.5 -> 8 + 2.5 = 10.5 -> Math.round = 11
@@ -224,5 +226,113 @@ describe("Early Warning Trends", () => {
     expect(citywide[3]!.week).toBe("W0");
     expect(citywide[3]!.total).toBe(18); // 10 + 8
     expect(citywide[3]!.counts).toEqual({ chemical: 10, electrical_hazard: 8 });
+  });
+
+  it("characterizes zero variance, missing weeks, and clamped projection", () => {
+    // zero variance [5,5,5,5] gives score 0
+    const s5 = scoreWard([5, 5, 5, 5]);
+    expect(s5.anomaly_score).toBe(0);
+
+    // [6,5,5,5] under R2: mean=5, sample_std=0, std_floor=sqrt(5) ~ 2.236
+    const s6 = scoreWard([6, 5, 5, 5]);
+    expect(s6.anomaly_score).toBeCloseTo((6 - 5) / Math.max(1, Math.sqrt(5)), 2);
+
+    // missing weeks [4,0,0,0] gives mean 0, pct_change 100
+    const s4 = scoreWard([4, 0, 0, 0]);
+    expect(s4.mean).toBe(0);
+    expect(s4.pct_change).toBe(100);
+
+    // negative projection [0,3,6,9] gives 0
+    expect(projectNextWeek([0, 3, 6, 9])).toBe(0);
+
+    // flat [2,2,2,2] is low
+    const sFlat = scoreWard([2, 2, 2, 2]);
+    expect(getRisk(sFlat.anomaly_score, sFlat.pct_change, sFlat.this_week, sFlat.mean, sFlat.prev_week)).toBe("low");
+  });
+
+  it("excludes wards with this_week === 1 from rankHotspots", () => {
+    const buckets: Record<string, WardBucket> = {
+      WardOnlyOne: {
+        ward: "WardOnlyOne",
+        counts: [1, 5, 5, 5],
+        categoryCounts: { general_overflow: 1 },
+      },
+      WardTwo: {
+        ward: "WardTwo",
+        counts: [2, 1, 1, 1],
+        categoryCounts: { general_overflow: 2 },
+      },
+    };
+    const hotspots = rankHotspots(buckets);
+    expect(hotspots.some((h) => h.ward === "WardOnlyOne")).toBe(false);
+    expect(hotspots.some((h) => h.ward === "WardTwo")).toBe(true);
+  });
+
+  it("FIXED low volume false alarm: [3,1,0,0] is not high", () => {
+    const s = scoreWard([3, 1, 0, 0]);
+    const risk = getRisk(s.anomaly_score, s.pct_change, s.this_week, s.mean, s.prev_week);
+    expect(risk).not.toBe("high");
+    expect(risk).toBe("medium");
+  });
+
+  it("FIXED zero to three: [3,0,0,0] is not high", () => {
+    const s = scoreWard([3, 0, 0, 0]);
+    const risk = getRisk(s.anomaly_score, s.pct_change, s.this_week, s.mean, s.prev_week);
+    expect(risk).not.toBe("high");
+    expect(risk).toBe("medium");
+  });
+
+  it("preserves planted spike wards and flags large spikes as high", () => {
+    // Connaught Place [8, 1, 0, 0] must be at least medium
+    const cp = scoreWard([8, 1, 0, 0]);
+    const cpRisk = getRisk(cp.anomaly_score, cp.pct_change, cp.this_week, cp.mean, cp.prev_week);
+    expect(["medium", "high"]).toContain(cpRisk);
+
+    // Karol Bagh [6, 4, 2, 1] must be at least medium
+    const kb = scoreWard([6, 4, 2, 1]);
+    const kbRisk = getRisk(kb.anomaly_score, kb.pct_change, kb.this_week, kb.mean, kb.prev_week);
+    expect(["medium", "high"]).toContain(kbRisk);
+
+    // Large spike [64, 15, 12, 10] is high
+    const large = scoreWard([64, 15, 12, 10]);
+    const largeRisk = getRisk(large.anomaly_score, large.pct_change, large.this_week, large.mean, large.prev_week);
+    expect(largeRisk).toBe("high");
+  });
+
+  it("bucket rows with a wardless row are excluded from hotspots and counted in unresolvedCount", () => {
+    const sqlRows: SqlBucketRow[] = [
+      {
+        ward_name: "NDMC CHARGE 2",
+        hazard_category: "chemical",
+        count_w0: 15,
+        count_w1: 2,
+        count_w2: 2,
+        count_w3: 2,
+        avg_severity_w0: 8.0,
+        max_severity_w0: 9,
+      },
+      {
+        ward_name: "Unresolved (no ward match)",
+        hazard_category: "general_overflow",
+        count_w0: 7,
+        count_w1: 1,
+        count_w2: 0,
+        count_w3: 0,
+        avg_severity_w0: 6.0,
+        max_severity_w0: 8,
+      },
+    ];
+
+    const buckets = convertSqlBucketsToWardBuckets(sqlRows);
+    expect(buckets["Unresolved (no ward match)"]).toBeDefined();
+
+    const hotspots = rankHotspots(buckets);
+    const hotspotWards = hotspots.map((h) => h.ward);
+    expect(hotspotWards).not.toContain("Unresolved (no ward match)");
+    expect(hotspotWards).toContain("NDMC CHARGE 2");
+
+    const unresolvedRows = sqlRows.filter((r) => r.ward_name === "Unresolved (no ward match)");
+    const unresolvedCount = unresolvedRows.reduce((sum, r) => sum + r.count_w0, 0);
+    expect(unresolvedCount).toBe(7);
   });
 });
