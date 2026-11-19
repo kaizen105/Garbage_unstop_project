@@ -10,12 +10,21 @@ import { estimateImpact } from "@/lib/finance/impact";
 import { humanizeCategory } from "@/lib/utils/format";
 import { getDispatchBadge } from "@/lib/dispatch";
 import { DATA_DISCLOSURE_TEXT } from "@/lib/dataDisclosure";
+import { ALL_HAZARD_CATEGORIES, getCategoryLabel } from "@/lib/categories";
 
 const HazardMap = dynamic(() => import("@/components/map/HazardMap").then((m) => m.HazardMap), { ssr: false });
 
 export function DashboardClient() {
   const { reports, appendReports, loadDemoData, resetView, isResetting } = useReports();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [mapFilterCategory, setMapFilterCategory] = useState<string>("all");
+  const [mapFilterMinSeverity, setMapFilterMinSeverity] = useState<number>(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
 
   const [stats, setStats] = useState<{
     total: number;
@@ -135,13 +144,13 @@ export function DashboardClient() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
-      <header className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0">
+    <div className="flex flex-col h-screen w-full max-w-full bg-slate-900 text-slate-100 overflow-x-hidden overflow-y-hidden">
+      <header className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-red-500">SafaiKavach</h1>
-          <p className="text-sm text-slate-400">Hear the hazard before it hurts.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-red-500">SafaiKavach</h1>
+          <p className="text-xs sm:text-sm text-slate-400">Hear the hazard before it hurts.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {healthStatus && (
             <div className={`text-xs px-3 py-1.5 rounded-full border font-mono flex items-center gap-2 ${
               healthStatus.reachable
@@ -166,8 +175,17 @@ export function DashboardClient() {
           )}
 
           <button
+            onClick={() => setIsSidebarOpen((prev) => !prev)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-200 border border-slate-700 flex items-center gap-1.5"
+            title={isSidebarOpen ? "Collapse reporting panel" : "Expand reporting panel"}
+          >
+            <span className="font-mono text-slate-400">{isSidebarOpen ? "<<" : ">>"}</span>
+            <span>{isSidebarOpen ? "Hide Reporter" : "Show Reporter"}</span>
+          </button>
+
+          <button
             onClick={resetView}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-300"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium transition-colors text-slate-300 border border-slate-700"
             title="Reset local filter view"
           >
             Reset View
@@ -176,14 +194,15 @@ export function DashboardClient() {
       </header>
 
       <div className="flex flex-col md:flex-row flex-1 min-h-0 md:h-full h-auto overflow-y-auto md:overflow-hidden">
-        <div className="w-full md:w-[380px] flex flex-col border-r border-slate-800 bg-slate-900 md:overflow-y-auto p-4 gap-4 shrink-0">
-          <div className="border-b border-slate-800 shrink-0 pb-4">
-            <VoiceReporter />
-          </div>
+        {isSidebarOpen && (
+          <div className="w-full md:w-[380px] max-w-full flex flex-col border-r border-slate-800 bg-slate-900 md:overflow-y-auto p-4 gap-4 shrink-0 overflow-x-hidden">
+            <div className="border-b border-slate-800 shrink-0 pb-4">
+              <VoiceReporter />
+            </div>
 
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold mb-4 text-slate-200">Recent Reports</h2>
-            <div className="space-y-3">
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold mb-4 text-slate-200">Recent Reports</h2>
+              <div className="space-y-3">
               {reports.map((r) => (
                 <div
                   key={r.report_id}
@@ -242,6 +261,7 @@ export function DashboardClient() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="flex-1 flex flex-col bg-slate-800 min-h-[500px] md:min-h-0 relative">
           <div className="bg-slate-950 border-b border-amber-900/60 px-4 py-2 text-xs text-amber-200 text-center leading-relaxed shrink-0">
@@ -277,35 +297,102 @@ export function DashboardClient() {
           </div>
 
           <div className={`flex flex-col h-full ${activeTab === "map" ? "flex" : "hidden"}`}>
-            <div className="flex p-3 bg-slate-950 gap-4 text-sm border-b border-slate-800 shrink-0 flex-wrap items-center">
+            {/* Header stats: single emphasis color (High Sev), rest neutral slate */}
+            <div className="flex p-3 bg-slate-950 gap-4 text-xs sm:text-sm border-b border-slate-800 shrink-0 flex-wrap items-center text-slate-400">
               <div>
-                Total: <span className="font-bold text-white">{total}</span>
+                Total: <span className="font-semibold text-slate-200">{total}</span>
               </div>
-              <div>
+              <div className="bg-red-950/40 border border-red-900/60 px-2 py-0.5 rounded">
                 High Sev: <span className="font-bold text-red-400">{highSev}</span>
               </div>
               <div>
-                Avg Sev: <span className="font-bold text-yellow-400">{avgSev}</span>
+                Avg Sev: <span className="font-semibold text-slate-200">{avgSev}</span>
               </div>
               <div>
-                Hazmat: <span className="font-bold text-orange-400">{hazmat}</span>
+                Hazmat: <span className="font-semibold text-slate-200">{hazmat}</span>
               </div>
               <div
                 title="Illustrative estimate. Each non-routine report is assumed to avoid one incident of a fixed cost per category, scaled by severity/10. Not measured savings. Based on synthetic data."
-                className="cursor-help border-b border-dashed border-slate-500"
+                className="cursor-help border-b border-dashed border-slate-600"
               >
-                Est. prevented (illustrative): <span className="font-bold text-green-400">₹{totalNetInr.toLocaleString()}</span>
+                Est. prevented: <span className="font-semibold text-slate-200">₹{totalNetInr.toLocaleString()}</span>
               </div>
 
               <button
                 onClick={runAudit}
                 disabled={isAuditing}
-                className="ml-auto bg-purple-600 hover:bg-purple-700 px-4 py-1 rounded text-sm font-bold shadow-lg flex items-center"
+                className="ml-auto bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1 rounded text-xs font-semibold shadow transition-colors flex items-center"
               >
                 {isAuditing ? "Auditing..." : "Run Weekly Audit"}
               </button>
             </div>
+
+            {/* In-memory filters for loaded markers */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="map-filter-cat" className="text-slate-400 font-medium">Category:</label>
+                  <select
+                    id="map-filter-cat"
+                    value={mapFilterCategory}
+                    onChange={(e) => setMapFilterCategory(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-slate-500"
+                  >
+                    <option value="all">All Categories</option>
+                    {ALL_HAZARD_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {getCategoryLabel(cat)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="map-filter-sev" className="text-slate-400 font-medium">Min Severity:</label>
+                  <select
+                    id="map-filter-sev"
+                    value={mapFilterMinSeverity}
+                    onChange={(e) => setMapFilterMinSeverity(Number(e.target.value))}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-slate-500"
+                  >
+                    <option value={0}>All Severities (0+)</option>
+                    <option value={3}>Low+ (3+)</option>
+                    <option value={5}>Moderate+ (5+)</option>
+                    <option value={7}>High+ (7+)</option>
+                    <option value={9}>Critical (9+)</option>
+                  </select>
+                </div>
+
+                {(mapFilterCategory !== "all" || mapFilterMinSeverity > 0) && (
+                  <button
+                    onClick={() => {
+                      setMapFilterCategory("all");
+                      setMapFilterMinSeverity(0);
+                    }}
+                    className="text-slate-400 hover:text-slate-200 underline text-xs ml-1"
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
+
+              <div className="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                Filters apply to loaded markers only
+              </div>
+            </div>
+
             <div className="flex-1 relative z-0">
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="absolute top-16 left-4 z-[450] bg-slate-900/95 hover:bg-slate-800 text-slate-200 text-xs px-2.5 py-1.5 rounded-md border border-slate-700 shadow-lg flex items-center gap-1.5 transition-colors"
+                  title="Open reporting panel"
+                >
+                  <span className="font-mono text-slate-400">&gt;&gt;</span>
+                  <span>Show Reporter</span>
+                </button>
+              )}
+
               <HazardMap
                 selectedReportId={selectedReportId}
                 onSelectReport={setSelectedReportId}
@@ -313,6 +400,8 @@ export function DashboardClient() {
                 selectedWardName={selectedWardName}
                 isActive={activeTab === "map"}
                 totalReportCount={total}
+                filterCategory={mapFilterCategory}
+                filterMinSeverity={mapFilterMinSeverity}
               />
 
               {auditResult && auditResult.status === "success" && (

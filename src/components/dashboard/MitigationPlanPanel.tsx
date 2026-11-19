@@ -161,7 +161,26 @@ export function MitigationPlanPanel() {
 
               {/* Priority Cards */}
               <div className="space-y-4">
-                <h3 className="text-md font-semibold text-slate-300">Targeted Priority Interventions</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="text-md font-semibold text-slate-300">Targeted Priority Interventions</h3>
+                  {/* Urgency Legend */}
+                  <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300">
+                    <span className="font-semibold text-slate-400">Urgency:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                      <span className="text-red-400 font-medium">immediate</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      <span className="text-amber-400 font-medium">this_week</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                      <span className="text-blue-400 font-medium">monitor</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-4">
                   {data.plan.priorities.map((p, idx) => (
                     <div key={`${p.wardKey}-${p.category}-${idx}`} className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
@@ -186,36 +205,46 @@ export function MitigationPlanPanel() {
                         </div>
                       </div>
 
-                      {/* Grounded incident metrics */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-slate-900 rounded-lg text-xs">
-                        <div>
-                          <div className="text-slate-500">7-Day Count</div>
-                          <div className="font-bold text-slate-200 text-sm">{p.current7}</div>
+                      {/* Block 1: Evidence */}
+                      <div className="border border-slate-800/80 bg-slate-900/60 rounded-lg p-3.5 space-y-2">
+                        <div className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                          Evidence
                         </div>
-                        <div>
-                          <div className="text-slate-500">Prior 7-Day</div>
-                          <div className="font-bold text-slate-400 text-sm">{p.previous7}</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-500">Net Delta</div>
-                          <div className={`font-bold text-sm ${p.delta > 0 ? "text-red-400" : "text-emerald-400"}`}>
-                            {p.delta > 0 ? `+${p.delta}` : p.delta}
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                          <div>
+                            <div className="text-slate-500">7-Day Count</div>
+                            <div className="font-bold text-slate-200 text-sm">{p.current7}</div>
                           </div>
-                        </div>
-                        <div>
-                          <div className="text-slate-500">Avg Severity</div>
-                          <div className="font-bold text-yellow-400 text-sm">{p.avgSeverity} / 10</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-500">Max Severity</div>
-                          <div className="font-bold text-red-400 text-sm">{p.maxSeverity} / 10</div>
+                          <div>
+                            <div className="text-slate-500">Prior 7-Day</div>
+                            <div className="font-bold text-slate-400 text-sm">{p.previous7}</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-500">Net Delta</div>
+                            <div className={`font-bold text-sm ${p.delta > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                              {p.delta > 0 ? `+${p.delta}` : p.delta}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-500">Avg Severity</div>
+                            <div className="font-bold text-yellow-400 text-sm">{p.avgSeverity} / 10</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-500">Max Severity</div>
+                            <div className="font-bold text-red-400 text-sm">{p.maxSeverity} / 10</div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Likely Causes */}
-                      <div>
-                        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                          Diagnostic Hypotheses & Root Causes
+                      {/* Block 2: Hypotheses */}
+                      <div className="border border-slate-800/80 bg-slate-900/60 rounded-lg p-3.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                            Hypotheses
+                          </span>
+                          <span className="text-[11px] text-amber-400/90 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded font-medium">
+                            Model hypothesis, not confirmed
+                          </span>
                         </div>
                         <ul className="list-disc list-inside space-y-1 text-sm text-slate-300">
                           {p.likelyCauses.map((c, i) => (
@@ -224,14 +253,14 @@ export function MitigationPlanPanel() {
                         </ul>
                       </div>
 
-                      {/* Actions */}
-                      <div>
-                        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                          Operational Actions & Task Force Assignment
+                      {/* Block 3: Actions */}
+                      <div className="border border-slate-800/80 bg-slate-900/60 rounded-lg p-3.5 space-y-2">
+                        <div className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                          Actions
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {p.actions.map((act, i) => (
-                            <div key={i} className="p-3 bg-slate-900/80 rounded border border-slate-800 flex flex-col justify-between">
+                            <div key={i} className="p-3 bg-slate-950/60 rounded border border-slate-800 flex flex-col justify-between">
                               <span className="text-xs font-bold text-blue-400 mb-1">{act.owner}</span>
                               <span className="text-xs text-slate-200 leading-relaxed">{act.action}</span>
                             </div>

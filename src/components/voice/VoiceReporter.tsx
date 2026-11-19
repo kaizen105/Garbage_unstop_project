@@ -243,7 +243,7 @@ export function VoiceReporter() {
   };
 
   return (
-    <div className="p-5 max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-xl shadow-md space-y-4 text-slate-100">
+    <div className="w-full max-w-full p-4 sm:p-5 mx-auto bg-slate-900 border border-slate-800 rounded-xl shadow-md space-y-4 text-slate-100 box-border">
       {state === "idle" && (
         <>
           <div className="flex flex-col gap-2">
@@ -333,8 +333,8 @@ export function VoiceReporter() {
                 {result.trace.stages.map((st, idx) => (
                   <div key={idx} className="flex justify-between items-center text-[11px]">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span className={st.ok ? "text-emerald-400" : "text-red-400 font-bold"}>
-                        {st.ok ? "✓" : "✗"}
+                      <span className={st.ok ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                        {st.ok ? "[OK]" : "[FAIL]"}
                       </span>
                       <span className="font-medium text-slate-300">{st.stage}</span>
                       {st.detail && <span className="text-slate-500 truncate">({st.detail})</span>}

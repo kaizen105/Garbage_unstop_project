@@ -15,6 +15,7 @@ import type { FeatureCollection } from "geojson";
 import { humanizeCategory } from "@/lib/utils/format";
 import { OSM_DARK_TILE_CONFIG } from "@/lib/mapTiles";
 import { findWardFeature } from "@/lib/spatial/findWardFeature";
+import { filterReports } from "@/lib/map/filterReports";
 
 async function fetchRoute(coords: { lat: number; lng: number }) {
   const res = await fetch("/api/route", {
@@ -133,6 +134,8 @@ export interface HazardMapProps {
   selectedWardName?: string | null;
   isActive?: boolean;
   totalReportCount?: number;
+  filterCategory?: string;
+  filterMinSeverity?: number;
 }
 
 export function HazardMap({
@@ -142,6 +145,8 @@ export function HazardMap({
   selectedWardName,
   isActive = true,
   totalReportCount,
+  filterCategory = "all",
+  filterMinSeverity = 0,
 }: HazardMapProps) {
   const { reports } = useReports();
   const [wardsLayer, setWardsLayer] = useState<FeatureCollection | null>(null);
@@ -244,8 +249,12 @@ export function HazardMap({
     return { color: "#3388ff", weight: 1, fillOpacity: 0.1 };
   };
 
-  // Draw individual markers for the latest 300 reports only
-  const displayReports = reports.slice(0, 300);
+  // Draw individual markers for the loaded reports slice, filtered by category and minSeverity
+  const loadedSlice = reports.slice(0, 300);
+  const displayReports = filterReports(loadedSlice, {
+    category: filterCategory,
+    minSeverity: filterMinSeverity,
+  });
 
   return (
     <div className="relative w-full h-full" style={{ isolation: "isolate" }}>
@@ -334,8 +343,16 @@ export function HazardMap({
         <MapUpdater reports={displayReports} selectedId={selectedReportId} selectedWardName={selectedWardName} wardsLayer={wardsLayer} />
       </MapContainer>
 
-      <div className="absolute top-4 left-4 z-[400] bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded shadow">
-        showing latest {Math.min(displayReports.length, 300)} of {totalReportCount ?? reports.length}
+      <div className="absolute top-4 left-4 z-[400] bg-slate-950/90 backdrop-blur border border-slate-700 text-slate-200 text-xs px-3.5 py-2.5 rounded-lg shadow-xl max-w-xs space-y-1">
+        <div className="font-bold text-slate-100 flex items-center gap-1.5 text-xs">
+          <span>Showing latest {displayReports.length} of {loadedSlice.length} loaded markers</span>
+          {totalReportCount && totalReportCount > reports.length && (
+            <span className="text-slate-400 font-normal">({totalReportCount} total in DB)</span>
+          )}
+        </div>
+        <div className="text-[11px] text-amber-300/90 font-medium">
+          Filters apply only to loaded markers
+        </div>
       </div>
 
       <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-stretch w-36">

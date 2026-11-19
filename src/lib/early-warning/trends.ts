@@ -26,6 +26,7 @@ export interface HotspotRanking {
   mean?: number;
   std?: number;
   flagged_reason?: string;
+  baseline_weeks?: number;
 }
 
 import landmarks from "../../../data/delhi_landmarks.json";
@@ -264,6 +265,7 @@ export function rankHotspots(
       mean: score.mean,
       std: score.std,
       flagged_reason: whyFlagged,
+      baseline_weeks: 3,
     });
   }
 
