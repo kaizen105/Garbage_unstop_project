@@ -538,3 +538,26 @@ The following verified screenshots reflect the active municipal operations dashb
 ### Mobile Responsive View (390px)
 ![Mobile Responsive View](docs/screenshots/mobile.png)
 *Demonstrates single-column mobile collapse with stacked KPI metrics, collapsible voice and text dispatch drawer, and bottom disclaimer positioning.*
+
+## 14. Future Roadmap and Engineering Improvements
+
+Should this platform transition from an analytical prototype into live municipal operations, the following engineering and mathematical enhancements are planned:
+
+### 1. Role-Based Access Control (RBAC) and Fleet Activation
+* **Activate Schema**: Connect the existing Prisma `User` and `Role` (`DRIVER`, `DISPATCHER`, `ADMIN`) schema to NextAuth or Auth.js with mobile OTP authentication.
+* **Driver Fleet PWA**: Mobile-optimized field view allowing sanitation and hazmat crews to inspect assigned dispatch bypass routes and update hazard statuses (`DISPATCHED` -> `RESOLVED`) with timestamped photo proofs.
+* **Dispatcher Queue**: Operational workbench for municipal staff to triage unassigned complaints, adjust severity ratings, and allocate departmental resources in real time.
+
+### 2. Mathematical and Statistical Modeling Enhancements
+* **Negative Binomial / Zero-Inflated Poisson (ZIP) Modeling**: Municipal complaint counts often feature severe overdispersion (variance significantly greater than the mean) and zero inflation in low-density residential wards. Replacing the current floored standard deviation with parameterized Negative Binomial dispersion models will reduce false alarms in low-volume wards.
+* **Spatial Autocorrelation (Moran's I and Getis-Ord Gi*)**: Current anomaly detection evaluates wards independently. Implementing a spatial adjacency weight matrix ($W_{ij}$) will enable detection of trans-boundary hazard corridors where hazards spill across ward borders (e.g. industrial runoff or uncollected perimeter heaps).
+* **Extended Temporal Seasonality**: Expand the analytical horizon from 4 rolling weeks to 52 weeks using STL decomposition or Bayesian structural time-series (Prophet / ARIMA) to separate genuine operational anomalies from predictable seasonal surges (monsoon waterlogging, post-festival packaging waste, or winter construction bans).
+* **Empirical Avoided Cost Matrix**: Replace placeholder economic multipliers with measured municipal tender contracts and GIS network distance calculations (via OSRM road graph APIs) to measure actual fuel savings and equipment depreciation.
+
+### 3. Spatial and GIS Data Upgrades
+* **2022 Delimitation Migration**: Ingest the official 2022 Delhi Municipal Corporation 250-ward delimitation boundary polygons to replace the legacy 290 DataMeet dataset.
+* **High-Volume Spatial Indexing**: Implement PostGIS spatial partitioning and GiST index optimizations to support hundred-thousand incident datasets with sub-50ms bounding box lookups.
+
+### 4. Multi-Channel Citizen Intake
+* **WhatsApp and IVR Ingestion**: Webhook listeners to accept citizen voice notes, photos, and location pins directly from WhatsApp Business APIs or automated phone lines.
+* **Client-Side Voice Activity Detection (VAD)**: In-browser audio silence trimming to reduce upload bandwidth and STT inference latency on mobile networks.
