@@ -2,7 +2,7 @@
 
 SafaiKavach is an intake and dispatch platform for road hazards including biomedical waste, loose electrical wiring, chemical leaks, demolition debris, and open garbage heaps. It provides voice and text intake, PostGIS municipal ward tagging, deterministic dispatch routing, statistical early warning anomaly detection, and weekly mitigation plan generation. All data is synthetic.
 
-Live deployment: https://garbage-unstop-project.vercel.app
+Live deployment: https://safaikavach.vercel.app
 
 ## 2. Architecture
 
@@ -12,7 +12,7 @@ The system consists of a Next.js web application interfacing with Neon PostgreSQ
 flowchart TD
     subgraph Client["Client Browser"]
         UI["React 19 Dashboard and Leaflet Map"]
-        AudioIntake["Voice Recorder: MediaRecorder Audio Blob"]
+        AudioIntake["Voice Recorder: 16kHz PCM WAV Audio"]
         TextIntake["Text Form: Hazard Description and GPS"]
     end
 
