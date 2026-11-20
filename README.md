@@ -134,23 +134,23 @@ Incidents are aggregated into four consecutive 7-day weekly windows:
 * W0: 7 days ago to current timestamp
 
 The baseline mean is calculated over the three prior weeks:
-$$ \text{mean} = \frac{W_{-3} + W_{-2} + W_{-1}}{3} $$
+`mean = (W-3 + W-2 + W-1) / 3`
 
 Sample variance with 2 degrees of freedom:
-$$ s^2 = \frac{\sum_{i=1}^{3} (W_{-i} - \text{mean})^2}{2} $$
+`s^2 = ((W-3 - mean)^2 + (W-2 - mean)^2 + (W-1 - mean)^2) / 2`
 
 Effective standard deviation applies a floor to prevent division by zero or inflated scores on low baseline counts:
-$$ \text{std} = \max\left(\max(1, \sqrt{\text{mean}}), \sqrt{s^2}\right) $$
+`std = max(max(1, sqrt(mean)), sqrt(s^2))`
 
 Anomaly score:
-$$ z = \frac{W_0 - \text{mean}}{\text{std}} $$
+`z = (W0 - mean) / std`
 
 Next-week volume is estimated using ordinary least squares linear regression over indices 0, 1, 2, 3 corresponding to W-3, W-2, W-1, W0.
 
 ### The R2 Classification Rule with MIN_HIGH=13
 Wards are classified into risk tiers:
-* High: $z \ge 2.0$ AND $W_0 \ge 13$ AND $(W_0 - \text{mean}) \ge 3$
-* Medium: $z \ge 1.0$ OR (week-over-week increase $\ge 50\%$ with $W_0 \ge 2$ and $W_{-1} \ge 3$)
+* High: `z >= 2.0` AND `W0 >= 13` AND `(W0 - mean) >= 3`
+* Medium: `z >= 1.0` OR (week-over-week increase `>= 50%` with `W0 >= 2` and `W-1 >= 3`)
 * Low: All other qualifying wards
 
 ### Backtest Summary (from docs/EARLY_WARNING_BACKTEST.md)
@@ -186,11 +186,12 @@ Estimated prevented cost is an illustrative estimate, not measured financial sav
 ### Formula
 Only reports with non-routine dispatch actions (`actionRequired` not equal to `routine_collection`) are assigned an estimated prevented cost. Routine collection reports evaluate to 0 INR.
 
-$$ \text{Prevented Cost} = \text{Base Cost}(\text{hazardCategory}) \times \frac{\text{severityLevel}}{10} $$
+`Prevented Cost = Base Cost(hazardCategory) * (severityLevel / 10)`
 
 If vehicle bypass routing is active, net illustrative impact subtracts detour vehicle travel cost:
-$$ \text{Detour Cost} = \text{Extra Distance (km)} \times 30 \text{ INR/km} $$
-$$ \text{Net Impact} = \max(0, \text{Prevented Cost} - \text{Detour Cost}) $$
+`Detour Cost = Extra Distance (km) * 30 INR/km`
+
+`Net Impact = max(0, Prevented Cost - Detour Cost)`
 
 ### Placeholder Base Cost Assumptions
 * `chemical`: 120,000 INR

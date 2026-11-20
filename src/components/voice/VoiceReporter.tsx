@@ -23,6 +23,59 @@ interface ReportResult {
   trace?: PipelineTrace;
 }
 
+function resampleTo16k(audioData: Float32Array, origSampleRate: number): Float32Array {
+  if (origSampleRate === 16000 || audioData.length === 0) {
+    return audioData;
+  }
+  const ratio = origSampleRate / 16000;
+  const newLength = Math.round(audioData.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const origIndex = i * ratio;
+    const indexFloor = Math.floor(origIndex);
+    const indexCeil = Math.min(audioData.length - 1, indexFloor + 1);
+    const fraction = origIndex - indexFloor;
+    const sFloor = audioData[indexFloor] ?? 0;
+    const sCeil = audioData[indexCeil] ?? 0;
+    result[i] = sFloor * (1 - fraction) + sCeil * fraction;
+  }
+  return result;
+}
+
+function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  // "RIFF" chunk descriptor
+  view.setUint32(0, 0x52494646, false);
+  view.setUint32(4, 36 + samples.length * 2, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // "fmt " sub-chunk
+  view.setUint32(12, 0x666d7420, false);
+  view.setUint32(16, 16, true); // SubChunk1Size (16 for PCM)
+  view.setUint16(20, 1, true); // AudioFormat (1 = PCM)
+  view.setUint16(22, 1, true); // NumChannels (1 = Mono)
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, sampleRate * 2, true); // ByteRate
+  view.setUint16(32, 2, true); // BlockAlign
+  view.setUint16(34, 16, true); // BitsPerSample
+
+  // "data" sub-chunk
+  view.setUint32(36, 0x64617461, false);
+  view.setUint32(40, samples.length * 2, true);
+
+  // Write PCM 16-bit samples
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const rawSample = samples[i] ?? 0;
+    const s = Math.max(-1, Math.min(1, rawSample));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
 export function VoiceReporter() {
   const [state, setState] = useState<"idle" | "recording" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -31,10 +84,12 @@ export function VoiceReporter() {
   const [textInput, setTextInput] = useState("");
   const { addReport } = useReports();
 
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioChunks = useRef<Blob[]>([]);
-  const timer = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmChunksRef = useRef<Float32Array[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const timer = useRef<NodeJS.Timeout | null>(null);
 
   const getGeo = useCallback((): Promise<{ lat: number; lng: number } | null> => {
     return new Promise((resolve) => {
@@ -45,17 +100,6 @@ export function VoiceReporter() {
         { timeout: 5000 }
       );
     });
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorder.current && mediaRecorder.current.state === "recording") {
-      mediaRecorder.current.stop();
-    }
-    if (timer.current) clearInterval(timer.current);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
   }, []);
 
   const processAudio = useCallback(async (blob: Blob) => {
@@ -76,7 +120,11 @@ export function VoiceReporter() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${res.status}`);
+        const message =
+          errorData.message ||
+          (errorData.error === "INVALID_AUDIO" ? "Invalid or unsupported audio format." : errorData.error) ||
+          `HTTP ${res.status}`;
+        throw new Error(message);
       }
 
       const data = await res.json();
@@ -89,32 +137,114 @@ export function VoiceReporter() {
     }
   }, [addReport, getGeo]);
 
+  const stopRecording = useCallback(() => {
+    if (timer.current) {
+      clearInterval(timer.current);
+      timer.current = null;
+    }
+
+    if (processorNodeRef.current) {
+      processorNodeRef.current.onaudioprocess = null;
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
+    }
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+
+    const currentContext = audioContextRef.current;
+    const sampleRate = currentContext?.sampleRate || 16000;
+    if (currentContext && currentContext.state !== "closed") {
+      currentContext.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
+    const chunks = pcmChunksRef.current;
+    pcmChunksRef.current = [];
+    const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
+
+    if (totalSamples === 0) {
+      setState("error");
+      setErrorMsg("No audio recorded. Please speak clearly into microphone.");
+      return;
+    }
+
+    const merged = new Float32Array(totalSamples);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const resampled = resampleTo16k(merged, sampleRate);
+    const wavBlob = encodeWav(resampled, 16000);
+    processAudio(wavBlob);
+  }, [processAudio]);
+
   useEffect(() => {
     return () => {
       if (timer.current) clearInterval(timer.current);
+      if (processorNodeRef.current) {
+        processorNodeRef.current.onaudioprocess = null;
+        processorNodeRef.current.disconnect();
+      }
+      if (sourceNodeRef.current) sourceNodeRef.current.disconnect();
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+      }
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   const startRecording = useCallback(async () => {
     setErrorMsg("");
-    audioChunks.current = [];
+    pcmChunksRef.current = [];
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
-      const mr = new MediaRecorder(stream);
-      mediaRecorder.current = mr;
 
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunks.current.push(e.data);
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+
+      if (!AudioContextClass) {
+        throw new Error("AudioContext is not supported by your browser.");
+      }
+
+      const audioCtx = new AudioContextClass();
+      audioContextRef.current = audioCtx;
+
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
+
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorNodeRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        pcmChunksRef.current.push(new Float32Array(inputData));
       };
 
-      mr.onstop = () => {
-        const blob = new Blob(audioChunks.current, { type: "audio/wav" });
-        processAudio(blob);
-      };
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
 
-      mr.start();
       setState("recording");
       setTime(30);
 
@@ -131,7 +261,7 @@ export function VoiceReporter() {
       setState("error");
       setErrorMsg("Microphone access denied or unsupported.");
     }
-  }, [processAudio, stopRecording]);
+  }, [stopRecording]);
 
   const submitText = async () => {
     if (!textInput.trim()) return;
